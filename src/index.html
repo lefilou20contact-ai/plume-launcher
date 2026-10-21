@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plume</title>
+<style>
+:root{--bg:#e9eef1;--panel:#f7f9fa;--ink:#17262e;--mute:#62747d;--line:#d3dde2;--acc:#2f55f0;--accink:#fff;--ok:#1f9d63;--bad:#d64545;--sel:#dfe6fb}
+@media (prefers-color-scheme:dark){:root{--bg:#10181d;--panel:#18232a;--ink:#e6eef2;--mute:#8da0aa;--line:#273540;--acc:#6f8cff;--accink:#0b1220;--ok:#3ccf8e;--bad:#ff7070;--sel:#22305a}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--panel);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:flex}
+nav{width:150px;padding:14px 8px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+nav b{padding:0 12px 12px;font-size:18px}
+nav button{all:unset;cursor:pointer;padding:9px 12px;border-radius:8px;color:var(--mute);font-weight:500}
+nav button.on{background:var(--sel);color:var(--ink);font-weight:700}
+nav .sp{flex:1}nav small{padding:0 12px;color:var(--mute);font-size:12px}
+main{flex:1;overflow:auto;padding:24px 28px}
+h1{font-size:26px;margin:0 0 4px}
+p.sub{margin:0 0 18px;color:var(--mute)}
+.hero{display:flex;gap:18px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.hero h2{margin:0;font-size:20px}.hero p{margin:2px 0 0;color:var(--mute);font-size:14px}
+.play{all:unset;cursor:pointer;background:var(--acc);color:var(--accink);font-weight:800;font-size:17px;padding:13px 34px;border-radius:10px}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.row{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
+.box{flex:1;min-width:220px;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.box h3{margin:0 0 8px;font-size:14px}
+label{display:block;font-size:13px;color:var(--mute);margin:8px 0 3px}
+input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:8px 4px;color:var(--mute)}
+.seg button.on{background:var(--acc);color:var(--accink);font-weight:700}
+.m{margin:9px 0;display:flex;justify-content:space-between;font-size:14px;color:var(--mute)}.m b{color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.item small{display:block;color:var(--mute);font-size:13px}
+.tg{all:unset;cursor:pointer;width:38px;height:22px;border-radius:12px;background:var(--line);position:relative;flex:none}
+.tg::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
+.tg[aria-pressed="true"]{background:var(--ok)}.tg[aria-pressed="true"]::after{left:19px}
+.btn{all:unset;cursor:pointer;padding:8px 16px;border:1px solid var(--line);border-radius:8px;font-weight:700}
+.btn.p{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+.ov{position:fixed;inset:0;background:var(--panel);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:24px;z-index:5}
+.ov.show{display:flex}.ov h2{margin:0;font-size:24px}.ov p{margin:0;color:var(--mute);max-width:460px}
+.ov pre{margin:4px 0;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--mute);max-width:100%;max-height:200px;overflow:auto}
+.v{display:none}.v.on{display:block}
+</style>
+</head>
+<body>
+<nav id="nav">
+  <b>Plume</b>
+  <button class="on" data-v="play">Jouer</button>
+  <button data-v="mods">Mods</button>
+  <button data-v="perf">Performance</button>
+  <button data-v="set">Paramètres</button>
+  <div class="sp"></div><small>Plume 0.1</small>
+</nav>
+<main>
+  <section class="v on" id="play">
+    <h1>Prêt à jouer</h1>
+    <p class="sub">Le launcher se ferme pendant la partie et revient à l’arrêt du jeu.</p>
+    <div class="hero">
+      <div><h2>Minecraft <span id="vn">1.21.4</span></h2><p>Mode hors-ligne · <span id="rn">4</span> Go de RAM · profil <span id="pn">Équilibré</span></p></div>
+      <button class="play" id="go">Jouer</button>
+    </div>
+    <div class="row">
+      <div class="box"><h3>Compte</h3><label for="user">Pseudo</label><input type="text" id="user" maxlength="16" value="Joueur"><label for="ver">Version</label><input type="text" id="ver" value="1.21.4"></div>
+      <div class="box"><h3>Profil de performance</h3><div class="seg" id="seg"><button data-p="0">Éco</button><button data-p="1" class="on">Équilibré</button><button data-p="2">Performance</button></div></div>
+    </div>
+  </section>
+  <section class="v" id="mods">
+    <h1>Mods</h1><p class="sub">Installation Fabric et mods Modrinth : prochaine étape.</p>
+    <div class="item"><div>Sodium, Lithium, FerriteCore<small>Mods de performance, bientôt installés automatiquement</small></div></div>
+    <div class="item"><div>Plume Cosmétiques<small>Notre mod de capes et accessoires</small></div><button class="tg" id="cosm" aria-pressed="true" aria-label="Cosmétiques Plume"></button></div>
+  </section>
+  <section class="v" id="perf">
+    <h1>Performance</h1><p class="sub">Le profil choisi règle la RAM et la priorité du jeu.</p>
+    <div class="box"><div class="m"><span>RAM maximale</span><b id="ramv">4 Go</b></div><input type="range" id="ram" min="2" max="16" value="4" aria-label="RAM maximale">
+    <div class="m"><span>Priorité CPU</span><b id="prio">Normale</b></div></div>
+  </section>
+  <section class="v" id="set">
+    <h1>Paramètres</h1><p class="sub">Les réglages sont gardés d’une session à l’autre.</p>
+    <div class="item"><div>Dossier de données<small>Instance « default », bibliothèques et ressources partagées</small></div></div>
+    <div class="item"><div>Java<small>Java 21 minimum pour Minecraft 1.21, il doit être installé</small></div></div>
+  </section>
+</main>
+
+<div class="ov" id="ovPrep"><h2>Préparation du jeu</h2><p id="prog">Démarrage…</p></div>
+<div class="ov" id="ovCrash">
+  <h2 style="color:var(--bad)">Le jeu s’est arrêté</h2><p id="cmsg"></p><pre id="clog"></pre>
+  <div style="display:flex;gap:10px"><button class="btn p" id="again">Relancer</button><button class="btn" id="back">Retour au launcher</button></div>
+</div>
+
+<script>
+const T=window.__TAURI__,inv=T.core.invoke,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const names=["Éco","Équilibré","Performance"],ramP=[2,4,8],prioP=["Basse","Normale","Normale"];
+let prof=+(localStorage.getItem("p")??1);
+$$("#nav button").forEach(b=>b.onclick=()=>{$$("#nav button").forEach(x=>x.classList.toggle("on",x===b));$$(".v").forEach(v=>v.classList.toggle("on",v.id===b.dataset.v))});
+function ram(){const r=$("#ram").value;$("#ramv").textContent=r+" Go";$("#rn").textContent=r;localStorage.setItem("r",r)}
+function setProf(p,keepRam){prof=p;localStorage.setItem("p",p);$$("#seg button").forEach(b=>b.classList.toggle("on",+b.dataset.p===p));$("#pn").textContent=names[p];$("#prio").textContent=prioP[p];if(!keepRam)$("#ram").value=ramP[p];ram()}
+$$("#seg button").forEach(b=>b.onclick=()=>setProf(+b.dataset.p));
+$("#ram").oninput=ram;
+$("#ver").oninput=()=>$("#vn").textContent=$("#ver").value;
+$("#cosm").onclick=()=>$("#cosm").setAttribute("aria-pressed",$("#cosm").getAttribute("aria-pressed")!=="true");
+$("#user").value=localStorage.getItem("u")||"Joueur";$("#ver").value=localStorage.getItem("v")||"1.21.4";$("#vn").textContent=$("#ver").value;
+if(localStorage.getItem("r"))$("#ram").value=localStorage.getItem("r");
+setProf(prof,!!localStorage.getItem("r"));
+T.event.listen("progress",e=>$("#prog").textContent=e.payload);
+async function crash(msg){$("#cmsg").textContent=msg;try{$("#clog").textContent=await inv("read_log")}catch(_){}$("#ovCrash").classList.add("show")}
+async function play(){
+  const u=$("#user").value.trim()||"Joueur",v=$("#ver").value.trim();
+  localStorage.setItem("u",u);localStorage.setItem("v",v);
+  $("#prog").textContent="Démarrage…";$("#ovPrep").classList.add("show");
+  try{const code=await inv("launch",{version:v,username:u,ramGb:+$("#ram").value,nice:prof===0?10:0});
+    $("#ovPrep").classList.remove("show");
+    if(code!==0)await crash("Minecraft s’est arrêté avec le code "+code+".");
+  }catch(err){$("#ovPrep").classList.remove("show");await crash(String(err))}
+}
+$("#go").onclick=play;
+$("#again").onclick=()=>{$("#ovCrash").classList.remove("show");play()};
+$("#back").onclick=()=>$("#ovCrash").classList.remove("show");
+</script>
+</body>
+</html>
