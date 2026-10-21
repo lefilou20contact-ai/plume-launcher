@@ -25,11 +25,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Version depuis le tag
+        shell: bash
+        run: |
+          node -e "const fs=require('fs'),f='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(f));c.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(c,null,2))"
       - run: npm install
       - run: npx tauri icon app-icon.png
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           PLUME_MS_CLIENT_ID: ${{ secrets.PLUME_MS_CLIENT_ID }}
           PLUME_CURSEFORGE_API_KEY: ${{ secrets.PLUME_CURSEFORGE_API_KEY }}
           PLUME_BACKEND_URL: ${{ secrets.PLUME_BACKEND_URL }}

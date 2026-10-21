@@ -12,6 +12,8 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tauri-plugin-updater = "2"
 
 [profile.release]
 opt-level = "s"

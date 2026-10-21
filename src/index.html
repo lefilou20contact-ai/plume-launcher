@@ -26,7 +26,7 @@ p.sub{margin:0 0 18px;color:var(--mute)}
 .box{flex:1;min-width:220px;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .box h3{margin:0 0 8px;font-size:14px}
 label{display:block;font-size:13px;color:var(--mute);margin:8px 0 3px}
-input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
+select,input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
 .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:8px 4px;color:var(--mute)}
 .seg button.on{background:var(--acc);color:var(--accink);font-weight:700}
@@ -52,18 +52,19 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <button data-v="mods">Mods</button>
   <button data-v="perf">Performance</button>
   <button data-v="set">Paramètres</button>
-  <div class="sp"></div><small>Plume 0.1</small>
+  <div class="sp"></div><small>Plume <span id="appv">0.1</span></small>
 </nav>
 <main>
   <section class="v on" id="play">
     <h1>Prêt à jouer</h1>
     <p class="sub">Le launcher se ferme pendant la partie et revient à l’arrêt du jeu.</p>
+    <div class="box" id="upd" style="display:none;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px"><span id="updt"></span><button class="btn p" id="updgo">Installer et redémarrer</button></div>
     <div class="hero">
       <div><h2>Minecraft <span id="vn">1.21.4</span></h2><p>Mode hors-ligne · <span id="rn">4</span> Go de RAM · profil <span id="pn">Équilibré</span></p></div>
       <button class="play" id="go">Jouer</button>
     </div>
     <div class="row">
-      <div class="box"><h3>Compte</h3><label for="user">Pseudo</label><input type="text" id="user" maxlength="16" value="Joueur"><label for="ver">Version</label><input type="text" id="ver" value="1.21.4"></div>
+      <div class="box"><h3>Compte</h3><label for="user">Pseudo</label><input type="text" id="user" maxlength="16" value="Joueur"><label for="ver">Version</label><select id="ver"></select><label><input type="checkbox" id="snap"> Afficher les snapshots</label></div>
       <div class="box"><h3>Profil de performance</h3><div class="seg" id="seg"><button data-p="0">Éco</button><button data-p="1" class="on">Équilibré</button><button data-p="2">Performance</button></div></div>
     </div>
   </section>
@@ -80,7 +81,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <section class="v" id="set">
     <h1>Paramètres</h1><p class="sub">Les réglages sont gardés d’une session à l’autre.</p>
     <div class="item"><div>Dossier de données<small>Instance « default », bibliothèques et ressources partagées</small></div></div>
-    <div class="item"><div>Java<small>Java 21 minimum pour Minecraft 1.21, il doit être installé</small></div></div>
+    <div class="item"><div>Java<small>Téléchargé automatiquement selon la version de Minecraft</small></div></div>
   </section>
 </main>
 
@@ -99,11 +100,24 @@ function ram(){const r=$("#ram").value;$("#ramv").textContent=r+" Go";$("#rn").t
 function setProf(p,keepRam){prof=p;localStorage.setItem("p",p);$$("#seg button").forEach(b=>b.classList.toggle("on",+b.dataset.p===p));$("#pn").textContent=names[p];$("#prio").textContent=prioP[p];if(!keepRam)$("#ram").value=ramP[p];ram()}
 $$("#seg button").forEach(b=>b.onclick=()=>setProf(+b.dataset.p));
 $("#ram").oninput=ram;
-$("#ver").oninput=()=>$("#vn").textContent=$("#ver").value;
 $("#cosm").onclick=()=>$("#cosm").setAttribute("aria-pressed",$("#cosm").getAttribute("aria-pressed")!=="true");
-$("#user").value=localStorage.getItem("u")||"Joueur";$("#ver").value=localStorage.getItem("v")||"1.21.4";$("#vn").textContent=$("#ver").value;
+$("#user").value=localStorage.getItem("u")||"Joueur";
 if(localStorage.getItem("r"))$("#ram").value=localStorage.getItem("r");
 setProf(prof,!!localStorage.getItem("r"));
+async function loadVersions(){
+  const sel=$("#ver"),keep=sel.value||localStorage.getItem("v")||"1.21.4";
+  let list;try{list=await inv("list_versions",{snapshots:$("#snap").checked})}catch(_){list=[keep]}
+  sel.innerHTML=list.map(v=>`<option>${v}</option>`).join("");
+  sel.value=list.includes(keep)?keep:list[0];$("#vn").textContent=sel.value;
+}
+$("#ver").onchange=()=>{$("#vn").textContent=$("#ver").value;localStorage.setItem("v",$("#ver").value)};
+$("#snap").onchange=loadVersions;
+loadVersions();
+(async()=>{
+  try{$("#appv").textContent=await T.app.getVersion()}catch(_){}
+  try{const n=await inv("check_update");if(n){$("#updt").textContent="Mise à jour "+n+" disponible";$("#upd").style.display="flex"}}catch(_){}
+})();
+$("#updgo").onclick=async()=>{$("#prog").textContent="Téléchargement de la mise à jour…";$("#ovPrep").classList.add("show");try{await inv("install_update")}catch(err){$("#ovPrep").classList.remove("show");alert(err)}};
 T.event.listen("progress",e=>$("#prog").textContent=e.payload);
 async function crash(msg){$("#cmsg").textContent=msg;try{$("#clog").textContent=await inv("read_log")}catch(_){}$("#ovCrash").classList.add("show")}
 async function play(){
