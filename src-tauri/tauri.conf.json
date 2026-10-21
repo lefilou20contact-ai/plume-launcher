@@ -12,7 +12,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "icon": ["../app-icon.png"]
   },
   "plugins": {
     "updater": {
