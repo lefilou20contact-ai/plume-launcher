@@ -6,7 +6,12 @@ use std::{path::{Path, PathBuf}, process::Stdio, time::Duration};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
+mod auth;
 mod config;
+
+fn prog(app: &AppHandle, t: &str, d: u64, n: u64) {
+    let _ = app.emit("progress", serde_json::json!({"t": t, "d": d, "n": n}));
+}
 
 fn e<E: ToString>(x: E) -> String { x.to_string() }
 
@@ -97,7 +102,7 @@ fn make_exec(p: &Path) -> Result<(), String> {
 fn make_exec(_: &Path) -> Result<(), String> { Ok(()) }
 
 // Télécharge le Java officiel que Mojang associe à cette version (comme le launcher officiel).
-async fn ensure_java(c: &reqwest::Client, shared: &Path, v: &Value) -> Result<String, String> {
+async fn ensure_java(app: &AppHandle, c: &reqwest::Client, shared: &Path, v: &Value) -> Result<String, String> {
     let comp = v["javaVersion"]["component"].as_str().unwrap_or("java-runtime-delta");
     let plat = if cfg!(all(target_os = "linux", target_arch = "x86_64")) { "linux" }
         else if cfg!(all(target_os = "windows", target_arch = "x86_64")) { "windows-x64" }
@@ -123,11 +128,16 @@ async fn ensure_java(c: &reqwest::Client, shared: &Path, v: &Value) -> Result<St
             _ => {}
         }
     }
+    let n = jobs.len() as u64;
+    let mut got = 0u64;
     let mut st = stream::iter(jobs.into_iter().map(|(u, d, x)| {
         let c = c.clone();
         async move { fetch(&c, &u, &d).await?; if x { make_exec(&d)?; } Ok::<(), String>(()) }
     })).buffer_unordered(16);
-    while let Some(r) = st.next().await { r?; }
+    while let Some(r) = st.next().await {
+        r?; got += 1;
+        if got % 10 == 0 || got == n { prog(app, "Téléchargement de Java", got, n); }
+    }
     tokio::fs::write(dir.join(".ok"), "").await.map_err(e)?;
     Ok(bin)
 }
@@ -153,19 +163,27 @@ async fn list_versions(app: AppHandle, snapshots: bool) -> Result<Vec<String>, S
 }
 
 #[tauri::command]
-async fn launch(app: AppHandle, version: String, username: String, ram_gb: u32, nice: i32) -> Result<i32, String> {
-    let say = |m: &str| { let _ = app.emit("progress", m.to_string()); };
+async fn launch(app: AppHandle, version: String, ram_gb: u32, nice: i32) -> Result<i32, String> {
     let shared = root(&app).join("shared");
     let game_dir = root(&app).join("instances").join("default");
     tokio::fs::create_dir_all(&game_dir).await.map_err(e)?;
     let c = client()?;
+
+    // Compte Microsoft obligatoire (PLUME_DEV_OFFLINE=Pseudo : seulement pour tester pendant le développement).
+    let sess = match auth::session(&c, &root(&app)).await {
+        Ok(s) => s,
+        Err(m) => match std::env::var("PLUME_DEV_OFFLINE") {
+            Ok(n) => auth::Session { name: n, uuid: "00000000000000000000000000000000".into(), token: "0".into() },
+            Err(_) => return Err(m),
+        },
+    };
 
     // Version déjà téléchargée : aucune connexion nécessaire.
     let vjson = shared.join("versions").join(&version).join(format!("{version}.json"));
     let v: Value = if vjson.exists() {
         serde_json::from_str(&tokio::fs::read_to_string(&vjson).await.map_err(e)?).map_err(e)?
     } else {
-        say("Récupération de la version…");
+        prog(&app, "Récupération de la version", 0, 0);
         let manifest = get_json(&c, config::MOJANG_MANIFEST).await.map_err(|_| "Connexion requise pour télécharger cette version".to_string())?;
         let url = manifest["versions"].as_array().and_then(|v| v.iter().find(|x| x["id"] == version.as_str()))
             .and_then(|x| x["url"].as_str()).ok_or(format!("Version {version} introuvable"))?.to_string();
@@ -175,10 +193,10 @@ async fn launch(app: AppHandle, version: String, username: String, ram_gb: u32, 
         serde_json::from_str(&t).map_err(e)?
     };
 
-    say("Préparation de Java…");
-    let java = ensure_java(&c, &shared, &v).await.unwrap_or_else(|_| "java".to_string());
+    prog(&app, "Préparation de Java", 0, 0);
+    let java = ensure_java(&app, &c, &shared, &v).await.unwrap_or_else(|_| "java".to_string());
 
-    say("Téléchargement du jeu…");
+    prog(&app, "Téléchargement du jeu", 0, 0);
     let jar = shared.join("versions").join(&version).join(format!("{version}.jar"));
     fetch(&c, v["downloads"]["client"]["url"].as_str().ok_or("client.jar manquant")?, &jar).await?;
 
@@ -205,8 +223,11 @@ async fn launch(app: AppHandle, version: String, username: String, ram_gb: u32, 
         }
     }
     classpath.push(jar.to_string_lossy().to_string());
-    say(&format!("Téléchargement de {} bibliothèques…", libs.len()));
-    for (u, d) in &libs { fetch(&c, u, d).await?; }
+    let nl = libs.len() as u64;
+    for (i, (u, d)) in libs.iter().enumerate() {
+        fetch(&c, u, d).await?;
+        prog(&app, "Bibliothèques", i as u64 + 1, nl);
+    }
 
     let idx_id = v["assetIndex"]["id"].as_str().ok_or("assetIndex manquant")?.to_string();
     let idx_path = shared.join("assets").join("indexes").join(format!("{idx_id}.json"));
@@ -227,7 +248,7 @@ async fn launch(app: AppHandle, version: String, username: String, ram_gb: u32, 
         })).buffer_unordered(32);
         while let Some(r) = st.next().await {
             r?; done += 1;
-            if done % 50 == 0 || done == total { say(&format!("Ressources du jeu : {done}/{total}")); }
+            if done % 25 == 0 || done == total { prog(&app, "Ressources du jeu", done as u64, total as u64); }
         }
     }
     // Très anciennes versions : les ressources doivent être copiées à leur nom d'origine.
@@ -254,19 +275,19 @@ async fn launch(app: AppHandle, version: String, username: String, ram_gb: u32, 
 
     let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
     let vars: Vec<(&str, String)> = vec![
-        ("${auth_player_name}", username.clone()),
+        ("${auth_player_name}", sess.name.clone()),
         ("${version_name}", version.clone()),
         ("${game_directory}", game_dir.to_string_lossy().to_string()),
         ("${assets_root}", shared.join("assets").to_string_lossy().to_string()),
         ("${game_assets}", game_assets.to_string_lossy().to_string()),
         ("${assets_index_name}", idx_id),
-        ("${auth_uuid}", "00000000-0000-0000-0000-000000000000".into()),
-        ("${auth_access_token}", "0".into()),
-        ("${auth_session}", "token:0".into()),
+        ("${auth_uuid}", sess.uuid.clone()),
+        ("${auth_access_token}", sess.token.clone()),
+        ("${auth_session}", format!("token:{}", sess.token)),
         ("${user_properties}", "{}".into()),
         ("${clientid}", "0".into()),
         ("${auth_xuid}", "0".into()),
-        ("${user_type}", "legacy".into()),
+        ("${user_type}", if sess.token == "0" { "legacy".into() } else { "msa".into() }),
         ("${version_type}", "Plume".into()),
         ("${profile_name}", "Plume".into()),
         ("${natives_directory}", natives.to_string_lossy().to_string()),
@@ -308,6 +329,43 @@ async fn launch(app: AppHandle, version: String, username: String, ram_gb: u32, 
 }
 
 #[tauri::command]
+fn account_info(app: AppHandle) -> Option<Value> {
+    auth::load(&root(&app)).map(|a| serde_json::json!({"name": a["name"], "uuid": a["uuid"]}))
+}
+
+#[tauri::command]
+async fn login_start() -> Result<Value, String> { auth::start(&client()?).await }
+
+#[tauri::command]
+async fn login_finish(app: AppHandle, device_code: String, interval: u64, expires_in: u64) -> Result<Value, String> {
+    auth::finish(&client()?, &root(&app), &device_code, interval, expires_in).await
+}
+
+#[tauri::command]
+fn logout(app: AppHandle) { auth::logout(&root(&app)) }
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") || !url.chars().all(|ch| ch.is_ascii_alphanumeric() || "/:.-_?=".contains(ch)) {
+        return Err("Adresse refusée".into());
+    }
+    let mut c = if cfg!(target_os = "windows") {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", ""]).arg(&url);
+        c
+    } else if cfg!(target_os = "macos") {
+        let mut c = std::process::Command::new("open");
+        c.arg(&url);
+        c
+    } else {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&url);
+        c
+    };
+    c.spawn().map(|_| ()).map_err(e)
+}
+
+#[tauri::command]
 fn read_log(app: AppHandle) -> String {
     let t = std::fs::read_to_string(root(&app).join("instances/default/launcher.log")).unwrap_or_default();
     let l: Vec<&str> = t.lines().collect();
@@ -327,7 +385,7 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
     u.download_and_install(
         |chunk, total| {
             got += chunk as u64;
-            let _ = app.emit("progress", format!("Mise à jour : {} / {} Mo", got / 1_000_000, total.unwrap_or(0) / 1_000_000));
+            prog(&app, "Mise à jour", got, total.unwrap_or(0));
         },
         || {},
     ).await.map_err(e)?;
@@ -337,7 +395,7 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![launch, read_log, list_versions, check_update, install_update])
+        .invoke_handler(tauri::generate_handler![launch, read_log, list_versions, check_update, install_update, account_info, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }
