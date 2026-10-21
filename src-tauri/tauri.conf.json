@@ -12,7 +12,8 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg", "msi", "nsis", "deb", "rpm"],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "icon": ["../app-icon.png"]
   },
   "plugins": {
     "updater": {
