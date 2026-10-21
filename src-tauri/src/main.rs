@@ -217,10 +217,12 @@ async fn launch(app: AppHandle, version: String, username: String, ram_gb: u32, 
     let total = objs.len();
     let mut done = 0;
     {
-        let mut st = stream::iter(objs.iter().map(|(_, h)| {
+        let jobs: Vec<(String, PathBuf)> = objs.iter().map(|(_, h)| (
+            format!("https://resources.download.minecraft.net/{}/{}", &h[..2], h),
+            shared.join("assets").join("objects").join(&h[..2]).join(h),
+        )).collect();
+        let mut st = stream::iter(jobs.into_iter().map(|(url, dest)| {
             let c = c.clone();
-            let dest = shared.join("assets").join("objects").join(&h[..2]).join(h);
-            let url = format!("https://resources.download.minecraft.net/{}/{}", &h[..2], h);
             async move { fetch(&c, &url, &dest).await }
         })).buffer_unordered(32);
         while let Some(r) = st.next().await {
