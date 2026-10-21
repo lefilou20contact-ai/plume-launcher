@@ -36,7 +36,7 @@ jobs:
       - name: Version depuis le tag
         shell: bash
         run: |
-          node -e "const fs=require('fs'),f='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(f));c.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(c,null,2))"
+          node -e "const fs=require('fs'),f='src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(f)),v=process.env.GITHUB_REF_NAME.replace(/^v/,'');if(!/^\\d+\\.\\d+\\.\\d+$/.test(v)){console.error('Le tag doit etre de la forme v1.2.3 (trois nombres), recu : '+process.env.GITHUB_REF_NAME);process.exit(1)}c.version=v;fs.writeFileSync(f,JSON.stringify(c,null,2))"
 
       - run: npm install
 
