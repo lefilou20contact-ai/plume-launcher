@@ -169,12 +169,12 @@ async fn launch(app: AppHandle, version: String, ram_gb: u32, nice: i32) -> Resu
     tokio::fs::create_dir_all(&game_dir).await.map_err(e)?;
     let c = client()?;
 
-    // Compte Microsoft obligatoire (PLUME_DEV_OFFLINE=Pseudo : seulement pour tester pendant le développement).
+    // Compte Microsoft obligatoire (mode test réservé aux builds de développement).
     let sess = match auth::session(&c, &root(&app)).await {
         Ok(s) => s,
-        Err(m) => match std::env::var("PLUME_DEV_OFFLINE") {
-            Ok(n) => auth::Session { name: n, uuid: "00000000000000000000000000000000".into(), token: "0".into() },
-            Err(_) => return Err(m),
+        Err(m) => match dev_session() {
+            Some(s) => s,
+            None => return Err(m),
         },
     };
 
@@ -329,6 +329,19 @@ async fn launch(app: AppHandle, version: String, ram_gb: u32, nice: i32) -> Resu
 }
 
 #[tauri::command]
+fn dev_offline() -> Option<String> { dev_session().map(|s| s.name) }
+
+// Mode test sans compte : n'existe QUE dans les builds de développement (npm run dev).
+// Les versions publiées (release) exigent toujours un compte Microsoft qui possède Minecraft.
+#[cfg(debug_assertions)]
+fn dev_session() -> Option<auth::Session> {
+    std::env::var("PLUME_DEV_OFFLINE").ok().filter(|s| !s.is_empty())
+        .map(|n| auth::Session { name: n, uuid: "00000000000000000000000000000000".into(), token: "0".into() })
+}
+#[cfg(not(debug_assertions))]
+fn dev_session() -> Option<auth::Session> { None }
+
+#[tauri::command]
 fn account_info(app: AppHandle) -> Option<Value> {
     auth::load(&root(&app)).map(|a| serde_json::json!({"name": a["name"], "uuid": a["uuid"]}))
 }
@@ -395,7 +408,7 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![launch, read_log, list_versions, check_update, install_update, account_info, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![launch, read_log, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }

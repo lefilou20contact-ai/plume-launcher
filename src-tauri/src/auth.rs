@@ -145,7 +145,14 @@ pub async fn session(c: &reqwest::Client, dir: &Path) -> Result<Session, String>
             Ok(Session { name, uuid, token: acc["mc_token"].as_str().unwrap_or("0").to_string() })
         }
         // Pas de connexion : on joue avec le profil vérifié lors de la dernière connexion.
-        Err(m) if m.starts_with("NET:") => Ok(Session { name, uuid, token: "0".into() }),
+        // Au-delà de 30 jours sans vérification en ligne, une reconnexion est exigée.
+        Err(m) if m.starts_with("NET:") => {
+            if now().saturating_sub(acc["verified"].as_u64().unwrap_or(0)) > 30 * 86400 {
+                Err("Connexion internet requise : ton compte n'a pas été vérifié depuis plus de 30 jours.".into())
+            } else {
+                Ok(Session { name, uuid, token: "0".into() })
+            }
+        }
         Err(m) => Err(format!("Session expirée, reconnecte-toi ({})", m.trim_start_matches("AUTH:"))),
     }
 }

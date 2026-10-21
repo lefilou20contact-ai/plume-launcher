@@ -132,8 +132,9 @@ T.event.listen("progress",e=>{
 let acct=null;
 async function refreshAcct(){
   try{acct=await inv("account_info")}catch(_){acct=null}
-  $("#who").textContent=acct?acct.name:"Non connecté";
-  $("#go").disabled=!acct;
+  let dev=null;try{dev=await inv("dev_offline")}catch(_){}
+  $("#who").textContent=acct?acct.name:(dev?dev+" (test hors-ligne)":"Non connecté");
+  $("#go").disabled=!acct&&!dev;
   $("#acc").innerHTML=acct?'<div class="m"><span>Connecté</span><b>'+acct.name+'</b></div><button class="btn" id="lo">Se déconnecter</button>':'<button class="btn p" id="li">Se connecter avec Microsoft</button>';
   if(acct)$("#lo").onclick=async()=>{await inv("logout");refreshAcct()};else $("#li").onclick=login;
 }
