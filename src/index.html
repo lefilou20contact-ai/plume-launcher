@@ -4,165 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plume</title>
-<style>
-:root{--bg:#e9eef1;--panel:#f7f9fa;--ink:#17262e;--mute:#62747d;--line:#d3dde2;--acc:#2f55f0;--accink:#fff;--ok:#1f9d63;--bad:#d64545;--sel:#dfe6fb}
-@media (prefers-color-scheme:dark){:root{--bg:#10181d;--panel:#18232a;--ink:#e6eef2;--mute:#8da0aa;--line:#273540;--acc:#6f8cff;--accink:#0b1220;--ok:#3ccf8e;--bad:#ff7070;--sel:#22305a}}
-*{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{background:var(--panel);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:flex}
-nav{width:150px;padding:14px 8px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
-nav b{padding:0 12px 12px;font-size:18px}
-nav button{all:unset;cursor:pointer;padding:9px 12px;border-radius:8px;color:var(--mute);font-weight:500}
-nav button.on{background:var(--sel);color:var(--ink);font-weight:700}
-nav .sp{flex:1}nav small{padding:0 12px;color:var(--mute);font-size:12px}
-main{flex:1;overflow:auto;padding:24px 28px}
-h1{font-size:26px;margin:0 0 4px}
-p.sub{margin:0 0 18px;color:var(--mute)}
-.hero{display:flex;gap:18px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
-.hero h2{margin:0;font-size:20px}.hero p{margin:2px 0 0;color:var(--mute);font-size:14px}
-.play{all:unset;cursor:pointer;background:var(--acc);color:var(--accink);font-weight:800;font-size:17px;padding:13px 34px;border-radius:10px}
-:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-.row{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
-.box{flex:1;min-width:220px;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.box h3{margin:0 0 8px;font-size:14px}
-label{display:block;font-size:13px;color:var(--mute);margin:8px 0 3px}
-select,input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
-.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
-.seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:8px 4px;color:var(--mute)}
-.seg button.on{background:var(--acc);color:var(--accink);font-weight:700}
-.m{margin:9px 0;display:flex;justify-content:space-between;font-size:14px;color:var(--mute)}.m b{color:var(--ink)}
-input[type=range]{width:100%;accent-color:var(--acc)}
-.item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
-.item small{display:block;color:var(--mute);font-size:13px}
-.tg{all:unset;cursor:pointer;width:38px;height:22px;border-radius:12px;background:var(--line);position:relative;flex:none}
-.tg::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
-.tg[aria-pressed="true"]{background:var(--ok)}.tg[aria-pressed="true"]::after{left:19px}
-.btn{all:unset;cursor:pointer;padding:8px 16px;border:1px solid var(--line);border-radius:8px;font-weight:700}
-.btn.p{background:var(--acc);color:var(--accink);border-color:var(--acc)}
-.ov{position:fixed;inset:0;background:var(--panel);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:24px;z-index:5}
-.ov.show{display:flex}.ov h2{margin:0;font-size:24px}.ov p{margin:0;color:var(--mute);max-width:460px}
-.ov pre{margin:4px 0;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--mute);max-width:100%;max-height:200px;overflow:auto}
-.pbar{width:min(360px,80%);height:8px;border-radius:5px;background:var(--line);overflow:hidden;margin:6px 0}
-.pbar u{display:block;height:100%;width:0;background:var(--acc);border-radius:5px;transition:width .3s}
-.pbar.ind u{width:35%;animation:ind 1.1s ease-in-out infinite alternate}
-@keyframes ind{from{margin-left:0}to{margin-left:65%}}
-.play:disabled,.play[disabled]{opacity:.5;cursor:not-allowed}
-.v{display:none}.v.on{display:block}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <nav id="nav">
-  <b>Plume</b>
-  <button class="on" data-v="play">Jouer</button>
-  <button data-v="mods">Mods</button>
-  <button data-v="perf">Performance</button>
-  <button data-v="set">Paramètres</button>
-  <div class="sp"></div><small>Plume <span id="appv">0.1</span></small>
+  <div class="brand"><span class="logo"></span>Plume</div>
+  <button data-p="home" class="on"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Jouer</button>
+  <button data-p="inst"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Instances</button>
+  <button data-p="mods"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>Mods</button>
+  <button data-p="set"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Paramètres</button>
+  <div class="sp"></div>
+  <small>Plume <span id="appv"></span></small>
 </nav>
 <main>
-  <section class="v on" id="play">
-    <h1>Prêt à jouer</h1>
-    <p class="sub">Le launcher se ferme pendant la partie et revient à l’arrêt du jeu.</p>
-    <div class="box" id="upd" style="display:none;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px"><span id="updt"></span><button class="btn p" id="updgo">Installer et redémarrer</button></div>
-    <div class="hero">
-      <div><h2>Minecraft <span id="vn">1.21.4</span></h2><p><span id="who">Non connecté</span> · <span id="rn">4</span> Go de RAM · profil <span id="pn">Équilibré</span></p></div>
-      <button class="play" id="go">Jouer</button>
-    </div>
-    <div class="row">
-      <div class="box"><h3>Compte Microsoft</h3><div id="acc"></div><label for="ver">Version</label><select id="ver"></select><label><input type="checkbox" id="snap"> Afficher les snapshots</label></div>
-      <div class="box"><h3>Profil de performance</h3><div class="seg" id="seg"><button data-p="0">Éco</button><button data-p="1" class="on">Équilibré</button><button data-p="2">Performance</button></div></div>
-    </div>
-  </section>
-  <section class="v" id="mods">
-    <h1>Mods</h1><p class="sub">Installation Fabric et mods Modrinth : prochaine étape.</p>
-    <div class="item"><div>Sodium, Lithium, FerriteCore<small>Mods de performance, bientôt installés automatiquement</small></div></div>
-    <div class="item"><div>Plume Cosmétiques<small>Notre mod de capes et accessoires</small></div><button class="tg" id="cosm" aria-pressed="true" aria-label="Cosmétiques Plume"></button></div>
-  </section>
-  <section class="v" id="perf">
-    <h1>Performance</h1><p class="sub">Le profil choisi règle la RAM et la priorité du jeu.</p>
-    <div class="box"><div class="m"><span>RAM maximale</span><b id="ramv">4 Go</b></div><input type="range" id="ram" min="2" max="16" value="4" aria-label="RAM maximale">
-    <div class="m"><span>Priorité CPU</span><b id="prio">Normale</b></div></div>
-  </section>
-  <section class="v" id="set">
-    <h1>Paramètres</h1><p class="sub">Les réglages sont gardés d’une session à l’autre.</p>
-    <div class="item"><div>Dossier de données<small>Instance « default », bibliothèques et ressources partagées</small></div></div>
-    <div class="item"><div>Java<small>Téléchargé automatiquement selon la version de Minecraft</small></div></div>
-  </section>
+  <div class="banner" id="upd" hidden><span id="updt"></span><button class="btn p sm" id="updgo">Installer et redémarrer</button></div>
+  <section class="v on" id="p-home"></section>
+  <section class="v" id="p-inst"></section>
+  <section class="v" id="p-mods"></section>
+  <section class="v" id="p-set"></section>
 </main>
+<div id="toasts" aria-live="polite"></div>
+<div class="modal" id="modal"></div>
 
-<div class="ov" id="ovPrep"><h2>Préparation du jeu</h2><div class="pbar ind"><u id="pb"></u></div><p id="prog">Démarrage…</p></div>
-<div class="ov" id="ovLogin"><h2>Connexion Microsoft</h2><p>Ouvre <b id="lurl"></b> dans ton navigateur et entre ce code :</p><h1 id="lcode" style="letter-spacing:4px;margin:6px 0"></h1><p id="lerr">En attente de la connexion…</p><button class="btn" id="lclose">Fermer</button></div>
-<div class="ov" id="ovCrash">
-  <h2 style="color:var(--bad)">Le jeu s’est arrêté</h2><p id="cmsg"></p><pre id="clog"></pre>
-  <div style="display:flex;gap:10px"><button class="btn p" id="again">Relancer</button><button class="btn" id="back">Retour au launcher</button></div>
-</div>
-
-<script>
-const T=window.__TAURI__,inv=T.core.invoke,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const names=["Éco","Équilibré","Performance"],ramP=[2,4,8],prioP=["Basse","Normale","Normale"];
-let prof=+(localStorage.getItem("p")??1);
-$$("#nav button").forEach(b=>b.onclick=()=>{$$("#nav button").forEach(x=>x.classList.toggle("on",x===b));$$(".v").forEach(v=>v.classList.toggle("on",v.id===b.dataset.v))});
-function ram(){const r=$("#ram").value;$("#ramv").textContent=r+" Go";$("#rn").textContent=r;localStorage.setItem("r",r)}
-function setProf(p,keepRam){prof=p;localStorage.setItem("p",p);$$("#seg button").forEach(b=>b.classList.toggle("on",+b.dataset.p===p));$("#pn").textContent=names[p];$("#prio").textContent=prioP[p];if(!keepRam)$("#ram").value=ramP[p];ram()}
-$$("#seg button").forEach(b=>b.onclick=()=>setProf(+b.dataset.p));
-$("#ram").oninput=ram;
-$("#cosm").onclick=()=>$("#cosm").setAttribute("aria-pressed",$("#cosm").getAttribute("aria-pressed")!=="true");
-
-if(localStorage.getItem("r"))$("#ram").value=localStorage.getItem("r");
-setProf(prof,!!localStorage.getItem("r"));
-async function loadVersions(){
-  const sel=$("#ver"),keep=sel.value||localStorage.getItem("v")||"1.21.4";
-  let list;try{list=await inv("list_versions",{snapshots:$("#snap").checked})}catch(_){list=[keep]}
-  sel.innerHTML=list.map(v=>`<option>${v}</option>`).join("");
-  sel.value=list.includes(keep)?keep:list[0];$("#vn").textContent=sel.value;
-}
-$("#ver").onchange=()=>{$("#vn").textContent=$("#ver").value;localStorage.setItem("v",$("#ver").value)};
-$("#snap").onchange=loadVersions;
-loadVersions();
-(async()=>{
-  try{$("#appv").textContent=await T.app.getVersion()}catch(_){}
-  try{const n=await inv("check_update");if(n){$("#updt").textContent="Mise à jour "+n+" disponible";$("#upd").style.display="flex"}}catch(_){}
-})();
-$("#updgo").onclick=async()=>{$("#prog").textContent="Téléchargement de la mise à jour…";$("#ovPrep").classList.add("show");try{await inv("install_update")}catch(err){$("#ovPrep").classList.remove("show");$("#updt").textContent="Échec de la mise à jour : "+err}};
-T.event.listen("progress",e=>{
-  const p=e.payload,bar=$("#pb").parentElement,mb=p.n>1e6;
-  $("#prog").textContent=p.t+(p.n?" : "+(mb?(p.d/1e6).toFixed(1)+" / "+(p.n/1e6).toFixed(1)+" Mo":p.d+" / "+p.n):"…");
-  if(p.n){bar.classList.remove("ind");$("#pb").style.width=Math.min(100,p.d/p.n*100)+"%"}else{bar.classList.add("ind");$("#pb").style.width=""}
-});
-let acct=null;
-async function refreshAcct(){
-  try{acct=await inv("account_info")}catch(_){acct=null}
-  let dev=null;try{dev=await inv("dev_offline")}catch(_){}
-  $("#who").textContent=acct?acct.name:(dev?dev+" (test hors-ligne)":"Non connecté");
-  $("#go").disabled=!acct&&!dev;
-  $("#acc").innerHTML=acct?'<div class="m"><span>Connecté</span><b>'+acct.name+'</b></div><button class="btn" id="lo">Se déconnecter</button>':'<button class="btn p" id="li">Se connecter avec Microsoft</button>';
-  if(acct)$("#lo").onclick=async()=>{await inv("logout");refreshAcct()};else $("#li").onclick=login;
-}
-async function login(){
-  $("#lerr").textContent="En attente de la connexion…";$("#lerr").style.color="";
-  try{
-    const d=await inv("login_start");
-    $("#lcode").textContent=d.user_code;$("#lurl").textContent=d.verification_uri;
-    $("#ovLogin").classList.add("show");
-    inv("open_url",{url:d.verification_uri}).catch(()=>{});
-    await inv("login_finish",{deviceCode:d.device_code,interval:d.interval,expiresIn:d.expires_in});
-    $("#ovLogin").classList.remove("show");refreshAcct();
-  }catch(err){$("#lerr").textContent=String(err);$("#lerr").style.color="var(--bad)";$("#ovLogin").classList.add("show")}
-}
-$("#lclose").onclick=()=>$("#ovLogin").classList.remove("show");
-refreshAcct();
-async function crash(msg){$("#cmsg").textContent=msg;try{$("#clog").textContent=await inv("read_log")}catch(_){}$("#ovCrash").classList.add("show")}
-async function play(){
-  const v=$("#ver").value.trim();localStorage.setItem("v",v);
-  $("#prog").textContent="Démarrage…";$("#pb").parentElement.classList.add("ind");$("#ovPrep").classList.add("show");
-  try{const code=await inv("launch",{version:v,ramGb:+$("#ram").value,nice:prof===0?10:0});
-    $("#ovPrep").classList.remove("show");
-    if(code!==0)await crash("Minecraft s’est arrêté avec le code "+code+".");
-  }catch(err){$("#ovPrep").classList.remove("show");await crash(String(err))}
-}
-$("#go").onclick=play;
-$("#again").onclick=()=>{$("#ovCrash").classList.remove("show");play()};
-$("#back").onclick=()=>$("#ovCrash").classList.remove("show");
-</script>
+<div class="ov" id="ovPrep"><h2 id="ptitle">Préparation</h2><div class="pbar ind"><u id="pb"></u></div><p id="prog">Démarrage…</p></div>
+<div class="ov" id="ovLogin"><h2>Connexion Microsoft</h2><p>Ouvre <b id="lurl"></b> dans ton navigateur et entre ce code :</p><h1 id="lcode"></h1><p id="lerr">En attente de la connexion…</p><button class="btn" id="lclose">Fermer</button></div>
+<div class="ov" id="ovCrash"><h2 class="bad">Le jeu s’est arrêté</h2><p id="cmsg"></p><pre id="clog"></pre><div class="row"><button class="btn p" id="again">Relancer</button><button class="btn" id="back">Retour au launcher</button></div></div>
+<script src="app.js"></script>
 </body>
 </html>
