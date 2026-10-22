@@ -20,7 +20,7 @@ fn e<E: ToString>(x: E) -> String { x.to_string() }
 fn root(app: &AppHandle) -> PathBuf { app.path().app_data_dir().expect("dossier de données") }
 
 fn client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder().user_agent(config::USER_AGENT).connect_timeout(Duration::from_secs(10)).build().map_err(e)
+    reqwest::Client::builder().user_agent(config::USER_AGENT).connect_timeout(Duration::from_secs(10)).pool_max_idle_per_host(64).build().map_err(e)
 }
 
 fn os_name() -> &'static str {
@@ -328,9 +328,16 @@ async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<i32,
     prog(&app, "Préparation de Java", 0, 0);
     let java = ensure_java(&app, &c, &shared, &v).await.unwrap_or_else(|_| "java".to_string());
 
-    prog(&app, "Téléchargement du jeu", 0, 0);
+    // Une version déjà préparée n'est pas revérifiée : démarrage bien plus rapide.
+    let loader_key = if inst["loader"] == "fabric" { format!("fabric-{}", inst["loader_version"].as_str().unwrap_or("")) } else { "vanilla".to_string() };
+    let ready = shared.join("versions").join(&version).join(format!(".ready-{loader_key}"));
+    let fast = ready.exists();
+
     let jar = shared.join("versions").join(&version).join(format!("{version}.jar"));
-    fetch(&c, v["downloads"]["client"]["url"].as_str().ok_or("client.jar manquant")?, &jar).await?;
+    if !fast {
+        prog(&app, "Téléchargement du jeu", 0, 0);
+        fetch(&c, v["downloads"]["client"]["url"].as_str().ok_or("client.jar manquant")?, &jar).await?;
+    }
 
     let os = os_name();
     let mut classpath: Vec<String> = vec![];
@@ -355,54 +362,69 @@ async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<i32,
         }
     }
     classpath.push(jar.to_string_lossy().to_string());
-    let nl = libs.len() as u64;
-    for (i, (u, d)) in libs.iter().enumerate() {
-        fetch(&c, u, d).await?;
-        prog(&app, "Bibliothèques", i as u64 + 1, nl);
+    if !fast {
+        let nl = libs.len() as u64;
+        let mut got = 0u64;
+        let mut st = stream::iter(libs.into_iter().map(|(u, d)| {
+            let c = c.clone();
+            async move { fetch(&c, &u, &d).await }
+        })).buffer_unordered(16);
+        while let Some(r) = st.next().await {
+            r?; got += 1;
+            prog(&app, "Bibliothèques", got, nl);
+        }
     }
 
     let idx_id = v["assetIndex"]["id"].as_str().ok_or("assetIndex manquant")?.to_string();
-    let idx_path = shared.join("assets").join("indexes").join(format!("{idx_id}.json"));
-    fetch(&c, v["assetIndex"]["url"].as_str().ok_or("assetIndex url")?, &idx_path).await?;
-    let idx: Value = serde_json::from_str(&tokio::fs::read_to_string(&idx_path).await.map_err(e)?).map_err(e)?;
-    let objs: Vec<(String, String)> = idx["objects"].as_object()
-        .map(|o| o.iter().filter_map(|(k, x)| x["hash"].as_str().map(|h| (k.clone(), h.to_string()))).collect()).unwrap_or_default();
-    let total = objs.len();
-    let mut done = 0;
-    {
-        let jobs: Vec<(String, PathBuf)> = objs.iter().map(|(_, h)| (
-            format!("https://resources.download.minecraft.net/{}/{}", &h[..2], h),
-            shared.join("assets").join("objects").join(&h[..2]).join(h),
-        )).collect();
-        let mut st = stream::iter(jobs.into_iter().map(|(url, dest)| {
-            let c = c.clone();
-            async move { fetch(&c, &url, &dest).await }
-        })).buffer_unordered(32);
-        while let Some(r) = st.next().await {
-            r?; done += 1;
-            if done % 25 == 0 || done == total { prog(&app, "Ressources du jeu", done as u64, total as u64); }
+    let game_assets: PathBuf;
+    if fast {
+        game_assets = PathBuf::from(tokio::fs::read_to_string(&ready).await.map_err(e)?.trim());
+    } else {
+        let idx_path = shared.join("assets").join("indexes").join(format!("{idx_id}.json"));
+        fetch(&c, v["assetIndex"]["url"].as_str().ok_or("assetIndex url")?, &idx_path).await?;
+        let idx: Value = serde_json::from_str(&tokio::fs::read_to_string(&idx_path).await.map_err(e)?).map_err(e)?;
+        let objs: Vec<(String, String)> = idx["objects"].as_object()
+            .map(|o| o.iter().filter_map(|(k, x)| x["hash"].as_str().map(|h| (k.clone(), h.to_string()))).collect()).unwrap_or_default();
+        let total = objs.len();
+        let mut done = 0;
+        {
+            let jobs: Vec<(String, PathBuf)> = objs.iter().map(|(_, h)| (
+                format!("https://resources.download.minecraft.net/{}/{}", &h[..2], h),
+                shared.join("assets").join("objects").join(&h[..2]).join(h),
+            )).collect();
+            let mut st = stream::iter(jobs.into_iter().map(|(url, dest)| {
+                let c = c.clone();
+                async move { fetch(&c, &url, &dest).await }
+            })).buffer_unordered(48);
+            while let Some(r) = st.next().await {
+                r?; done += 1;
+                if done % 25 == 0 || done == total { prog(&app, "Ressources du jeu", done as u64, total as u64); }
+            }
         }
-    }
-    // Très anciennes versions : les ressources doivent être copiées à leur nom d'origine.
-    let virt = idx["virtual"] == true;
-    let to_res = idx["map_to_resources"] == true;
-    let game_assets = if virt { shared.join("assets/virtual/legacy") } else if to_res { game_dir.join("resources") } else { shared.join("assets") };
-    if virt || to_res {
-        for (name, h) in &objs {
-            let src = shared.join("assets").join("objects").join(&h[..2]).join(h);
-            let dst = game_assets.join(name);
-            if !dst.exists() {
-                if let Some(p) = dst.parent() { tokio::fs::create_dir_all(p).await.map_err(e)?; }
-                tokio::fs::copy(&src, &dst).await.map_err(e)?;
+        // Très anciennes versions : les ressources doivent être copiées à leur nom d'origine.
+        let virt = idx["virtual"] == true;
+        let to_res = idx["map_to_resources"] == true;
+        game_assets = if virt { shared.join("assets/virtual/legacy") } else if to_res { game_dir.join("resources") } else { shared.join("assets") };
+        if virt || to_res {
+            for (name, h) in &objs {
+                let src = shared.join("assets").join("objects").join(&h[..2]).join(h);
+                let dst = game_assets.join(name);
+                if !dst.exists() {
+                    if let Some(p) = dst.parent() { tokio::fs::create_dir_all(p).await.map_err(e)?; }
+                    tokio::fs::copy(&src, &dst).await.map_err(e)?;
+                }
             }
         }
     }
 
     let natives = shared.join("natives").join(&version);
-    tokio::fs::create_dir_all(&natives).await.map_err(e)?;
-    for j in natives_jars {
-        let n = natives.clone();
-        tokio::task::spawn_blocking(move || extract(&j, &n)).await.map_err(e)??;
+    if !fast {
+        tokio::fs::create_dir_all(&natives).await.map_err(e)?;
+        for j in natives_jars {
+            let n = natives.clone();
+            tokio::task::spawn_blocking(move || extract(&j, &n)).await.map_err(e)??;
+        }
+        tokio::fs::write(&ready, game_assets.to_string_lossy().as_bytes()).await.map_err(e)?;
     }
 
     let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
@@ -430,7 +452,19 @@ async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<i32,
         ("${classpath_separator}", sep.into()),
     ];
     let main_class = v["mainClass"].as_str().ok_or("mainClass manquant")?.to_string();
-    let mut args: Vec<String> = vec![format!("-Xmx{}G", ram_gb.clamp(1, 32)), "-Xms512M".into()];
+    let ram = ram_gb.clamp(1, 32);
+    let mut args: Vec<String> = vec![format!("-Xmx{ram}G"), format!("-Xms{}G", ram.min(2))];
+    let gc: &[&str] = match opts["profile"].as_u64().unwrap_or(1) {
+        0 => &["-XX:+UseG1GC", "-XX:ParallelGCThreads=2", "-XX:ConcGCThreads=1"],
+        2 => &["-XX:+UnlockExperimentalVMOptions", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=30", "-XX:G1NewSizePercent=30", "-XX:G1MaxNewSizePercent=40", "-XX:G1ReservePercent=15", "-XX:+DisableExplicitGC", "-XX:+ParallelRefProcEnabled"],
+        _ => &["-XX:+UnlockExperimentalVMOptions", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50", "-XX:G1NewSizePercent=20", "-XX:G1ReservePercent=20"],
+    };
+    args.extend(gc.iter().map(|s| s.to_string()));
+    // Archive de classes (Java 21+) : les lancements suivants démarrent plus vite.
+    if v["javaVersion"]["majorVersion"].as_u64().unwrap_or(0) >= 21 && java != "java" {
+        args.push("-XX:+AutoCreateSharedArchive".into());
+        args.push(format!("-XX:SharedArchiveFile={}", game_dir.join("plume.jsa").to_string_lossy()));
+    }
     args.extend(opts["jvmArgs"].as_str().unwrap_or("").split_whitespace().filter(|a| a.starts_with('-')).map(String::from));
     if v["arguments"].is_object() {
         args.extend(collect(&v["arguments"]["jvm"], &vars));
@@ -484,7 +518,7 @@ fn dev_session() -> Option<auth::Session> { None }
 
 #[tauri::command]
 fn account_info(app: AppHandle) -> Option<Value> {
-    auth::load(&root(&app)).map(|a| serde_json::json!({"name": a["name"], "uuid": a["uuid"]}))
+    auth::active(&root(&app)).map(|a| serde_json::json!({"name": a["name"], "uuid": a["uuid"]}))
 }
 
 #[tauri::command]
@@ -493,6 +527,29 @@ async fn login_start() -> Result<Value, String> { auth::start(&client()?).await 
 #[tauri::command]
 async fn login_finish(app: AppHandle, device_code: String, interval: u64, expires_in: u64) -> Result<Value, String> {
     auth::finish(&client()?, &root(&app), &device_code, interval, expires_in).await
+}
+
+#[tauri::command]
+fn account_list(app: AppHandle) -> Vec<Value> { auth::list(&root(&app)) }
+
+#[tauri::command]
+fn account_switch(app: AppHandle, uuid: String) -> Result<(), String> { auth::switch(&root(&app), &uuid) }
+
+#[tauri::command]
+fn account_remove(app: AppHandle, uuid: String) -> Result<(), String> { auth::remove(&root(&app), &uuid) }
+
+// Oublie l'état « version prête » : tous les fichiers seront revérifiés au prochain lancement.
+#[tauri::command]
+fn repair_instance(app: AppHandle, id: String) -> Result<(), String> {
+    let inst = instances::get(&app, &id).ok_or("Instance introuvable")?;
+    let v = inst["version"].as_str().unwrap_or("");
+    if v.is_empty() || v.contains('/') || v.contains("..") { return Err("Version invalide".into()) }
+    if let Ok(rd) = std::fs::read_dir(root(&app).join("shared").join("versions").join(v)) {
+        for f in rd.flatten() {
+            if f.file_name().to_string_lossy().starts_with(".ready-") { let _ = std::fs::remove_file(f.path()); }
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -550,7 +607,7 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }

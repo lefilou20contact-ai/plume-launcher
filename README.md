@@ -4,7 +4,7 @@ Launcher Minecraft léger (Tauri + Rust).
 
 - Instances multiples (Vanilla ou Fabric), chacune avec ses mods, mondes et réglages
 - Mods Modrinth : recherche, installation avec dépendances, activation, mises à jour (sommes SHA-512 vérifiées)
-- Connexion Microsoft obligatoire, jeu hors ligne possible 30 jours après la dernière vérification
+- Plusieurs comptes Microsoft (tête du joueur dans la barre latérale), jeu hors ligne possible 30 jours après la dernière vérification
 - Personnalisation : thème, couleur d'accent, mémoire, arguments Java, taille de fenêtre
 - Mises à jour automatiques du launcher (AppImage sous Linux)
 

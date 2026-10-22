@@ -33,6 +33,7 @@ const seg = (opts, cur, fn) => {
 };
 const row = (t, d, ctl) => h("div", { class: "item" }, h("div", {}, h("b", {}, t), d && h("small", {}, d)), h("div", { class: "ctl" }, ctl));
 const card = (t, ...k) => h("section", { class: "card" }, t && h("h3", {}, t), ...k);
+const skel = n => h("div", {}, Array.from({ length: n }, () => h("div", { class: "skel" })));
 const empty = t => h("div", { class: "empty" }, t);
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + " M" : n >= 1e3 ? Math.round(n / 1e3) + " k" : String(n || 0);
 const errText = e => String(e && e.message || e);
@@ -79,10 +80,11 @@ function applyS() {
   if (S.theme === "system") r.removeAttribute("data-theme"); else r.dataset.theme = S.theme;
   const acc = /^#[0-9a-f]{6}$/i.test(S.accent) ? S.accent : DEF.accent;
   r.style.setProperty("--acc", acc); r.style.setProperty("--accink", ink(acc));
+  const n = parseInt(acc.slice(1), 16); r.style.setProperty("--glow", "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + ",.38)");
   document.body.classList.toggle("compact", !!S.compact);
 }
 const saveS = () => { localStorage.setItem("plume.s", JSON.stringify(S)); applyS(); };
-const launchOpts = i => ({ ramGb: i.ram_gb || S.ram, nice: P[S.profile].nice, jvmArgs: S.jvm, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
+const launchOpts = i => ({ ramGb: i.ram_gb || S.ram, nice: P[S.profile].nice, jvmArgs: S.jvm, profile: S.profile, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
 
 // ---------- État ----------
 let insts = [], curId = localStorage.getItem("plume.cur"), acct = null, dev = null, page = "home", modsTab = "inst";
@@ -112,17 +114,56 @@ function avatar(i) {
   return a;
 }
 
-// ---------- Compte ----------
+// ---------- Comptes ----------
+let accts = [];
 async function refreshAcct() {
-  try { acct = await inv("account_info"); } catch (_) { acct = null; }
+  try { accts = await inv("account_list"); } catch (_) { accts = []; }
+  acct = accts.find(a => a.active) || null;
   try { dev = await inv("dev_offline"); } catch (_) { dev = null; }
+  renderSide();
 }
 const canPlay = () => !!curInst() && !!(acct || dev);
-function accountCard() {
-  return card("Compte Microsoft", acct
-    ? row(acct.name, "Compte vérifié, Minecraft Java Edition", h("button", { class: "btn", onclick: async () => { await inv("logout"); await refreshAcct(); R[page](); } }, "Se déconnecter"))
-    : row(dev ? dev + " (test)" : "Non connecté", "Ton compte doit posséder Minecraft Java Edition.", h("button", { class: "btn p", onclick: login }, "Se connecter avec Microsoft")));
+// Tête du joueur (peau enregistrée) ; une pastille avec l'initiale sinon.
+function head(a, size) {
+  if (!a || typeof a.skin !== "string" || !a.skin.startsWith("data:image/png;base64,")) {
+    const d = h("div", { class: "av" }, ((a && a.name && a.name[0]) || "?").toUpperCase());
+    d.style.width = d.style.height = size + "px"; d.style.fontSize = Math.round(size * .45) + "px"; d.style.borderRadius = Math.round(size * .25) + "px";
+    return d;
+  }
+  const sc = size / 8, w = h("div", { class: "skin" });
+  const layer = (x, y) => { const l = h("div"); l.style.backgroundImage = 'url("' + a.skin + '")'; l.style.backgroundSize = (64 * sc) + "px auto"; l.style.backgroundPosition = (-x * sc) + "px " + (-y * sc) + "px"; return l; };
+  w.style.width = w.style.height = size + "px"; w.append(layer(8, 8), layer(40, 8));
+  return w;
 }
+function renderSide() {
+  closePop();
+  const label = acct ? acct.name : dev ? dev + " (test)" : "Se connecter";
+  $("#side-acc").replaceChildren(h("button", { class: "accbtn", "aria-haspopup": "menu", onclick: e => { e.stopPropagation(); accts.length ? openPop() : login(); } },
+    head(acct, 34), h("span", { class: "grow" }, h("b", {}, label), h("small", {}, acct ? "Compte Microsoft" : "Aucun compte")), accts.length ? h("span", { class: "chev" }) : null));
+}
+function closePop() { const p = $("#pop"); if (p) p.remove(); }
+function openPop() {
+  if ($("#pop")) { closePop(); return; }
+  const items = accts.map(a => h("button", { class: "pitem", onclick: async () => { closePop(); if (!a.active) await switchAcct(a.uuid); } },
+    head(a, 28), h("span", { class: "grow" }, a.name), a.active && h("span", { class: "chip" }, "Actif")));
+  $("#side-acc").append(h("div", { id: "pop", class: "pop", role: "menu" }, items,
+    h("button", { class: "pitem", onclick: () => { closePop(); login(); } }, h("span", { class: "plus" }, "+"), "Ajouter un compte"),
+    acct && h("button", { class: "pitem danger", onclick: async () => { closePop(); await removeAcct(acct.uuid); } }, "Se déconnecter")));
+}
+document.addEventListener("click", e => { if (!e.target.closest("#side-acc")) closePop(); });
+async function switchAcct(uuid) { try { await inv("account_switch", { uuid }); await refreshAcct(); R[page](); toast("Compte changé"); } catch (err) { toast(errText(err), "bad"); } }
+async function removeAcct(uuid) { try { await inv("account_remove", { uuid }); await refreshAcct(); R[page](); } catch (err) { toast(errText(err), "bad"); } }
+function accountCard() {
+  const c = card("Comptes Microsoft");
+  accts.forEach(a => c.append(h("div", { class: "item" },
+    h("div", { class: "ctl" }, head(a, 36), h("div", {}, h("b", {}, a.name, a.active && h("span", { class: "chip" }, "Actif")), h("small", {}, "Minecraft Java Edition"))),
+    h("div", { class: "ctl" }, !a.active && h("button", { class: "btn sm", onclick: () => switchAcct(a.uuid) }, "Utiliser"),
+      h("button", { class: "btn sm danger", onclick: () => confirmBox("Retirer " + a.name + " ?", "Le compte sera déconnecté de Plume. Tes mondes ne sont pas touchés.", "Retirer", () => removeAcct(a.uuid)) }, "Retirer")))));
+  if (!accts.length) c.append(row(dev ? dev + " (test)" : "Non connecté", "Ton compte doit posséder Minecraft Java Edition.", null));
+  c.append(h("div", { class: "bar2" }, h("button", { class: "btn p", onclick: login }, accts.length ? "Ajouter un compte" : "Se connecter avec Microsoft")));
+  return c;
+}
+const loginHint = () => (acct || dev) ? null : card(null, h("p", {}, "Connecte-toi avec ton compte Microsoft pour jouer. Il doit posséder Minecraft Java Edition."), h("br"), h("button", { class: "btn p", onclick: login }, "Se connecter avec Microsoft"));
 async function login() {
   $("#lerr").textContent = "En attente de la connexion…"; $("#lerr").classList.remove("bad");
   try {
@@ -132,7 +173,7 @@ async function login() {
     inv("open_url", { url: d.verification_uri }).catch(() => {});
     await inv("login_finish", { deviceCode: d.device_code, interval: d.interval, expiresIn: d.expires_in });
     $("#ovLogin").classList.remove("show");
-    await refreshAcct(); R[page]();
+    await refreshAcct(); R[page](); toast("Compte ajouté");
   } catch (err) { $("#lerr").textContent = errText(err); $("#lerr").classList.add("bad"); $("#ovLogin").classList.add("show"); }
 }
 $("#lclose").addEventListener("click", () => $("#ovLogin").classList.remove("show"));
@@ -160,7 +201,7 @@ function renderHome() {
   const el = $("#p-home"), i = curInst();
   el.replaceChildren(h("h1", {}, "Prêt à jouer"), h("p", { class: "sub" }, "Le launcher se cache pendant la partie et revient à l’arrêt du jeu."));
   if (!i) {
-    el.append(card(null, h("p", {}, "Tu n’as pas encore d’instance. Une instance, c’est une installation de Minecraft avec sa propre version et ses propres mods."), h("br"), h("button", { class: "btn p", onclick: () => newInstModal() }, "Créer ma première instance")), accountCard());
+    el.append(card(null, h("p", {}, "Tu n’as pas encore d’instance. Une instance, c’est une installation de Minecraft avec sa propre version et ses propres mods."), h("br"), h("button", { class: "btn p", onclick: () => newInstModal() }, "Créer ma première instance")), loginHint());
     return;
   }
   const sel = h("select", { class: "inp", "aria-label": "Instance active", onchange: e => { selectInst(e.target.value); renderHome(); } }, insts.map(x => h("option", { value: x.id }, x.name)));
@@ -169,7 +210,7 @@ function renderHome() {
     h("div", { class: "hero" }, avatar(i), h("div", { class: "grow" }, h("h2", {}, i.name), h("p", { class: "mute" }, desc(i))),
       h("button", { class: "play", disabled: !canPlay(), onclick: play }, "Jouer")),
     insts.length > 1 ? card("Instance active", sel) : null,
-    accountCard());
+    loginHint());
 }
 
 // ---------- Instances ----------
@@ -237,6 +278,7 @@ function editInstModal(i) {
   const body = h("div", {}, h("label", {}, "Nom"), name, h("label", {}, "Couleur"), sw,
     h("label", {}, "Mémoire (RAM)"), h("div", { class: "item" }, h("div", {}, "RAM propre à cette instance", h("small", {}, "Sinon, le réglage global est utilisé")), use),
     h("div", { class: "item" }, rng, lab),
+    h("div", { class: "item" }, h("div", {}, "Vérifier les fichiers", h("small", {}, "Retélécharge ce qui manque au prochain lancement")), mbtn("Vérifier", async () => { try { await inv("repair_instance", { id: i.id }); toast("Les fichiers seront vérifiés au prochain lancement"); } catch (err) { toast(errText(err), "bad"); } })),
     h("small", {}, "Version : Minecraft " + i.version + (i.loader === "fabric" ? " (Fabric " + (i.loader_version || "") + ")" : " (Vanilla)") + ". Pour changer de version, crée une nouvelle instance."));
   modal("Modifier l’instance", body, [mbtn("Annuler", closeModal), mbtn("Enregistrer", async () => {
     try { await inv("update_instance", { id: i.id, patch: { name: name.value, color, ram_gb: custom ? ramV : null } }); closeModal(); await loadInsts(); R[page](); toast("Instance modifiée"); }
@@ -261,7 +303,7 @@ async function renderMods() {
 }
 const icon = url => typeof url === "string" && url.startsWith("https://cdn.modrinth.com/") ? h("img", { class: "ico", src: url, alt: "", loading: "lazy" }) : h("div", { class: "ico" });
 async function drawInstalled(body, i) {
-  body.replaceChildren(h("p", { class: "mute" }, "Chargement…"));
+  body.replaceChildren(skel(3));
   let list; try { list = await inv("mod_list", { instanceId: i.id }); } catch (err) { body.replaceChildren(h("p", { class: "bad" }, errText(err))); return; }
   body.replaceChildren(
     h("div", { class: "bar2" }, h("button", { class: "btn", onclick: () => checkUpdates(i, body) }, "Rechercher des mises à jour"), h("button", { class: "btn", onclick: () => inv("open_folder", { id: i.id }) }, "Ouvrir le dossier")),
@@ -293,7 +335,7 @@ function drawBrowse(body, i) {
   const inp = h("input", { class: "inp", type: "search", placeholder: "Rechercher un mod (Sodium, Iris, Mod Menu…)" });
   const res = h("div", { class: "list" }), more = h("button", { class: "btn", hidden: true }, "Afficher plus");
   async function run(reset) {
-    if (reset) { offset = 0; res.replaceChildren(h("p", { class: "mute" }, "Recherche…")); }
+    if (reset) { offset = 0; res.replaceChildren(skel(4)); }
     try {
       const [r, l] = await Promise.all([inv("mod_search", { instanceId: i.id, query: inp.value.trim(), offset }), inv("mod_list", { instanceId: i.id })]);
       l.forEach(m => installed.add(m.project_id));
