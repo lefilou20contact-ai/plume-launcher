@@ -112,3 +112,10 @@ nav button{position:relative;transition:background .15s,color .15s}nav button sv
 nav button.on::before{content:"";position:absolute;left:0;top:22%;bottom:22%;width:3px;border-radius:3px;background:var(--acc);animation:grow .25s ease both}
 .pbar:not(.ind) u{background-image:linear-gradient(90deg,transparent 0,rgba(255,255,255,.45) 50%,transparent 100%);background-size:200% 100%;animation:shimmer 1.4s linear infinite}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---- Logs, état du jeu ---- */
+.logview{height:min(58vh,520px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.ln.err{color:var(--bad)}.ln.warn{color:#d6a02b}.f-warn .ln.info,.f-err .ln.info,.f-err .ln.warn{display:none}
+.bar2.wrap{flex-wrap:wrap;align-items:center;margin-bottom:12px}.bar2.wrap .seg{margin:0}.bar2 .ctl{display:flex;align-items:center;gap:8px;color:var(--mute)}
+.chip.live{background:var(--ok);color:#fff;margin-left:8px;animation:breathe 2s ease-in-out infinite}
+.btn.big{padding:13px 34px;font-size:16px;border-radius:11px}

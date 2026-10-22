@@ -23,7 +23,7 @@ fn write(app: &AppHandle, id: &str, v: &[Value]) -> Result<(), String> {
     std::fs::write(list_file(app, id)?, serde_json::to_string_pretty(v).map_err(e)?).map_err(e)
 }
 
-pub fn count(app: &AppHandle, id: &str) -> usize { if instances::valid_id(id) { read(app, id).len() } else { 0 } }
+pub fn count(app: &AppHandle, id: &str) -> usize { if instances::valid_id(id) { list(app, id).len() + list_manual(app, id).len() } else { 0 } }
 
 // Version de Minecraft + dossier des mods d'une instance Fabric.
 fn ctx(app: &AppHandle, id: &str) -> Result<(String, PathBuf), String> {
@@ -186,4 +186,40 @@ pub async fn updates(app: &AppHandle, id: &str, apply: bool) -> Result<Vec<Value
         write(app, id, &list)?;
     }
     Ok(out)
+}
+
+// Mods ajoutés à la main dans le dossier (non installés via Plume).
+pub fn list_manual(app: &AppHandle, id: &str) -> Vec<Value> {
+    let Ok(d) = instances::dir(app, id) else { return vec![] };
+    let tracked: HashSet<String> = read(app, id).iter().filter_map(|m| m["filename"].as_str().map(String::from)).collect();
+    let mut out: Vec<Value> = vec![];
+    if let Ok(rd) = std::fs::read_dir(d.join("mods")) {
+        for f in rd.flatten() {
+            let n = f.file_name().to_string_lossy().to_string();
+            let (base, on) = if let Some(b) = n.strip_suffix(".jar.disabled") { (format!("{b}.jar"), false) }
+                else if n.ends_with(".jar") { (n.clone(), true) } else { continue };
+            if tracked.contains(&base) || !safe_name(&base) { continue }
+            out.push(json!({"filename": base, "title": base.trim_end_matches(".jar"), "manual": true, "enabled": on, "project_id": Value::Null}));
+        }
+    }
+    out.sort_by(|a, b| a["title"].as_str().cmp(&b["title"].as_str()));
+    out
+}
+
+pub fn toggle_file(app: &AppHandle, id: &str, filename: &str) -> Result<bool, String> {
+    if !safe_name(filename) { return Err("Nom de fichier refusé".into()) }
+    let md = instances::dir(app, id)?.join("mods");
+    let on = md.join(filename);
+    let off = md.join(format!("{filename}.disabled"));
+    if on.exists() { std::fs::rename(&on, &off).map_err(e)?; Ok(false) }
+    else if off.exists() { std::fs::rename(&off, &on).map_err(e)?; Ok(true) }
+    else { Err("Fichier manquant".into()) }
+}
+
+pub fn remove_file(app: &AppHandle, id: &str, filename: &str) -> Result<(), String> {
+    if !safe_name(filename) { return Err("Nom de fichier refusé".into()) }
+    let md = instances::dir(app, id)?.join("mods");
+    let _ = std::fs::remove_file(md.join(filename));
+    let _ = std::fs::remove_file(md.join(format!("{filename}.disabled")));
+    Ok(())
 }

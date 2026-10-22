@@ -58,7 +58,7 @@ pub fn create(app: &AppHandle, name: &str, version: &str, loader: &str, loader_v
     let colors = ["#2f55f0", "#1f9d63", "#d6812b", "#b74bd6", "#d64545", "#2b9fd6"];
     let inst = json!({
         "id": id, "name": name, "version": version, "loader": loader, "loader_version": loader_version,
-        "ram_gb": Value::Null, "color": colors[list.len() % colors.len()], "created": now(), "last_played": 0
+        "ram_gb": Value::Null, "color": colors[list.len() % colors.len()], "created": now(), "last_played": 0, "playtime": 0
     });
     std::fs::create_dir_all(dir(app, &id)?.join("mods")).map_err(e)?;
     list.push(inst.clone());
@@ -108,5 +108,28 @@ pub fn delete(app: &AppHandle, id: &str) -> Result<(), String> {
     save(app, &list)?;
     let d = dir(app, id)?;
     if d.exists() { std::fs::remove_dir_all(d).map_err(e)?; }
+    Ok(())
+}
+
+pub fn add_playtime(app: &AppHandle, id: &str, secs: u64) {
+    let _g = LOCK.lock();
+    let mut list = load(app);
+    if let Some(i) = list.iter_mut().find(|i| i["id"] == id) {
+        let t = i["playtime"].as_u64().unwrap_or(0) + secs;
+        i["playtime"] = json!(t);
+        let _ = save(app, &list);
+    }
+}
+
+// Copie récursive (sans les fichiers temporaires du launcher).
+pub fn copy_dir(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(e)?;
+    for f in std::fs::read_dir(src).map_err(e)?.flatten() {
+        let ft = f.file_type().map_err(e)?;
+        let name = f.file_name();
+        if name == "launcher.log" || name == "plume.jsa" { continue }
+        let to = dst.join(&name);
+        if ft.is_dir() { copy_dir(&f.path(), &to)?; } else if ft.is_file() { std::fs::copy(f.path(), &to).map_err(e)?; }
+    }
     Ok(())
 }

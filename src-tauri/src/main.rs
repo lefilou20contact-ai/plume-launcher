@@ -2,7 +2,7 @@
 
 use futures_util::{stream, StreamExt};
 use serde_json::Value;
-use std::{collections::HashSet, path::{Path, PathBuf}, process::Stdio, time::Duration};
+use std::{collections::{BTreeMap, HashSet}, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::{Duration, UNIX_EPOCH}};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -10,6 +10,9 @@ mod auth;
 mod config;
 mod instances;
 mod modrinth;
+
+// Instances en cours de jeu (identifiant -> numéro de processus ; 0 = en préparation).
+static RUNNING: Mutex<BTreeMap<String, u32>> = Mutex::new(BTreeMap::new());
 
 fn prog(app: &AppHandle, t: &str, d: u64, n: u64) {
     let _ = app.emit("progress", serde_json::json!({"t": t, "d": d, "n": n}));
@@ -269,7 +272,17 @@ async fn mod_install(app: AppHandle, instance_id: String, project: String) -> Re
 }
 
 #[tauri::command]
-fn mod_list(app: AppHandle, instance_id: String) -> Vec<Value> { modrinth::list(&app, &instance_id) }
+fn mod_list(app: AppHandle, instance_id: String) -> Vec<Value> {
+    let mut l = modrinth::list(&app, &instance_id);
+    l.extend(modrinth::list_manual(&app, &instance_id));
+    l
+}
+
+#[tauri::command]
+fn mod_toggle_file(app: AppHandle, instance_id: String, filename: String) -> Result<bool, String> { modrinth::toggle_file(&app, &instance_id, &filename) }
+
+#[tauri::command]
+fn mod_remove_file(app: AppHandle, instance_id: String, filename: String) -> Result<(), String> { modrinth::remove_file(&app, &instance_id, &filename) }
 
 #[tauri::command]
 fn mod_toggle(app: AppHandle, instance_id: String, project: String) -> Result<bool, String> { modrinth::toggle(&app, &instance_id, &project) }
@@ -283,7 +296,18 @@ async fn mod_updates(app: AppHandle, instance_id: String, apply: bool) -> Result
 }
 
 #[tauri::command]
-async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<i32, String> {
+async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<(), String> {
+    {
+        let mut r = RUNNING.lock().map_err(e)?;
+        if r.contains_key(&instance_id) { return Err("Cette instance est déjà lancée".into()) }
+        r.insert(instance_id.clone(), 0);
+    }
+    let res = launch_inner(&app, &instance_id, opts).await;
+    if res.is_err() { if let Ok(mut r) = RUNNING.lock() { r.remove(&instance_id); } }
+    res
+}
+
+async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result<(), String> {
     let inst = instances::get(&app, &instance_id).ok_or("Instance introuvable")?;
     let version = inst["version"].as_str().ok_or("Version manquante")?.to_string();
     let ram_gb = opts["ramGb"].as_u64().unwrap_or(4) as u32;
@@ -326,7 +350,12 @@ async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<i32,
     }
 
     prog(&app, "Préparation de Java", 0, 0);
-    let java = ensure_java(&app, &c, &shared, &v).await.unwrap_or_else(|_| "java".to_string());
+    let custom = opts["javaPath"].as_str().filter(|p| !p.is_empty() && Path::new(p).is_file()).map(String::from);
+    let custom_java = custom.is_some();
+    let java = match custom {
+        Some(p) => p,
+        None => ensure_java(&app, &c, &shared, &v).await.unwrap_or_else(|_| "java".to_string()),
+    };
 
     // Une version déjà préparée n'est pas revérifiée : démarrage bien plus rapide.
     let loader_key = if inst["loader"] == "fabric" { format!("fabric-{}", inst["loader_version"].as_str().unwrap_or("")) } else { "vanilla".to_string() };
@@ -461,7 +490,7 @@ async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<i32,
     };
     args.extend(gc.iter().map(|s| s.to_string()));
     // Archive de classes (Java 21+) : les lancements suivants démarrent plus vite.
-    if v["javaVersion"]["majorVersion"].as_u64().unwrap_or(0) >= 21 && java != "java" {
+    if v["javaVersion"]["majorVersion"].as_u64().unwrap_or(0) >= 21 && !custom_java && java != "java" {
         args.push("-XX:+AutoCreateSharedArchive".into());
         args.push(format!("-XX:SharedArchiveFile={}", game_dir.join("plume.jsa").to_string_lossy()));
     }
@@ -494,13 +523,20 @@ async fn launch(app: AppHandle, instance_id: String, opts: Value) -> Result<i32,
         .stdout(Stdio::from(log)).stderr(Stdio::from(log2))
         .spawn().map_err(|_| format!("Impossible de lancer Java ({java})."))?;
 
-    let win = app.get_webview_window("main");
-    prog(&app, "Le jeu est en cours d'exécution", 0, 0);
-    instances::touch(&app, &instance_id);
-    if hide { if let Some(w) = &win { let _ = w.hide(); } }
-    let status = child.wait().await.map_err(e)?;
-    if let Some(w) = &win { let _ = w.show(); let _ = w.set_focus(); }
-    Ok(status.code().unwrap_or(-1))
+    if let Some(pid) = child.id() { if let Ok(mut r) = RUNNING.lock() { r.insert(instance_id.to_string(), pid); } }
+    instances::touch(app, instance_id);
+    if hide { if let Some(w) = app.get_webview_window("main") { let _ = w.hide(); } }
+    // Le jeu tourne en arrière-plan : le launcher reste utilisable (logs, mods...) et est prévenu à la fin.
+    let (app2, id2) = (app.clone(), instance_id.to_string());
+    let started = std::time::Instant::now();
+    tauri::async_runtime::spawn(async move {
+        let code = child.wait().await.ok().and_then(|s| s.code()).unwrap_or(-1);
+        if let Ok(mut r) = RUNNING.lock() { r.remove(&id2); }
+        instances::add_playtime(&app2, &id2, started.elapsed().as_secs());
+        if hide { if let Some(w) = app2.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); } }
+        let _ = app2.emit("game-exit", serde_json::json!({"id": id2, "code": code}));
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -550,6 +586,99 @@ fn repair_instance(app: AppHandle, id: String) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+fn running() -> Vec<String> { RUNNING.lock().map(|r| r.keys().cloned().collect()).unwrap_or_default() }
+
+#[tauri::command]
+fn stop_game(instance_id: String) -> Result<(), String> {
+    let pid = RUNNING.lock().map_err(e)?.get(&instance_id).copied().ok_or("Cette instance n'est pas lancée")?;
+    if pid == 0 { return Err("Le jeu est encore en préparation".into()) }
+    let p = pid.to_string();
+    let mut c = if cfg!(windows) {
+        let mut c = std::process::Command::new("taskkill");
+        c.args(["/PID", p.as_str(), "/T", "/F"]);
+        c
+    } else {
+        let mut c = std::process::Command::new("kill");
+        c.arg(p.as_str());
+        c
+    };
+    c.spawn().map(|_| ()).map_err(e)
+}
+
+fn log_rel_ok(rel: &str) -> bool {
+    if rel == "launcher.log" { return true }
+    let Some((d, name)) = rel.split_once('/') else { return false };
+    (d == "logs" || d == "crash-reports") && !name.contains('/') && !name.contains('\\') && !name.contains("..")
+        && (name.ends_with(".log") || name.ends_with(".txt")) && name.len() <= 100
+}
+
+fn file_info(d: &Path, rel: &str) -> Option<Value> {
+    let m = std::fs::metadata(d.join(rel)).ok()?;
+    let t = m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|x| x.as_secs()).unwrap_or(0);
+    Some(serde_json::json!({"rel": rel, "size": m.len(), "modified": t}))
+}
+
+#[tauri::command]
+fn log_files(app: AppHandle, instance_id: String) -> Result<Vec<Value>, String> {
+    let d = instances::dir(&app, &instance_id)?;
+    let mut out: Vec<Value> = ["launcher.log", "logs/latest.log"].iter().filter_map(|r| file_info(&d, r)).collect();
+    if let Ok(rd) = std::fs::read_dir(d.join("crash-reports")) {
+        let mut names: Vec<String> = rd.flatten().filter_map(|f| f.file_name().into_string().ok()).filter(|n| n.ends_with(".txt")).collect();
+        names.sort();
+        names.reverse();
+        out.extend(names.iter().take(15).filter_map(|n| file_info(&d, &format!("crash-reports/{n}"))));
+    }
+    Ok(out)
+}
+
+// Lit un log à partir d'une position (pour suivre le jeu en direct).
+#[tauri::command]
+fn log_read(app: AppHandle, instance_id: String, rel: String, offset: u64) -> Result<Value, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    if !log_rel_ok(&rel) { return Err("Fichier refusé".into()) }
+    let p = instances::dir(&app, &instance_id)?.join(&rel);
+    let Ok(mut f) = std::fs::File::open(&p) else { return Ok(serde_json::json!({"text": "", "offset": 0, "reset": false})) };
+    let size = f.metadata().map_err(e)?.len();
+    let reset = offset > size;
+    let mut start = if reset { 0 } else { offset };
+    if size - start > 262_144 { start = size - 262_144; }
+    f.seek(SeekFrom::Start(start)).map_err(e)?;
+    let mut buf = Vec::new();
+    f.take(262_144).read_to_end(&mut buf).map_err(e)?;
+    Ok(serde_json::json!({"text": String::from_utf8_lossy(&buf), "offset": start + buf.len() as u64, "reset": reset}))
+}
+
+fn dir_size(p: &Path) -> u64 {
+    let mut t = 0;
+    if let Ok(rd) = std::fs::read_dir(p) {
+        for f in rd.flatten() {
+            if let Ok(ft) = f.file_type() {
+                if ft.is_dir() { t += dir_size(&f.path()); } else if ft.is_file() { t += f.metadata().map(|m| m.len()).unwrap_or(0); }
+            }
+        }
+    }
+    t
+}
+
+#[tauri::command]
+async fn instance_size(app: AppHandle, id: String) -> Result<u64, String> {
+    let d = instances::dir(&app, &id)?;
+    tokio::task::spawn_blocking(move || dir_size(&d)).await.map_err(e)
+}
+
+#[tauri::command]
+async fn duplicate_instance(app: AppHandle, id: String) -> Result<Value, String> {
+    let inst = instances::get(&app, &id).ok_or("Instance introuvable")?;
+    let name: String = format!("{} (copie)", inst["name"].as_str().unwrap_or("Instance")).chars().take(40).collect();
+    let new = instances::create(&app, &name, inst["version"].as_str().unwrap_or(""), inst["loader"].as_str().unwrap_or("vanilla"), inst["loader_version"].as_str().map(String::from))?;
+    let nid = new["id"].as_str().unwrap_or("").to_string();
+    let (src, dst) = (instances::dir(&app, &id)?, instances::dir(&app, &nid)?);
+    tokio::task::spawn_blocking(move || instances::copy_dir(&src, &dst)).await.map_err(e)??;
+    let _ = instances::update(&app, &nid, &serde_json::json!({"ram_gb": inst["ram_gb"].clone()}));
+    Ok(new)
 }
 
 #[tauri::command]
@@ -607,7 +736,7 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }

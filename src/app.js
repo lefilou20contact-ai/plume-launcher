@@ -71,7 +71,7 @@ T.event.listen("progress", e => {
 // ---------- Réglages (personnalisation) ----------
 const P = [{ n: "Éco", ram: 2, nice: 10 }, { n: "Équilibré", ram: 4, nice: 0 }, { n: "Performance", ram: 8, nice: 0 }];
 const COLORS = ["#2f55f0", "#1f9d63", "#d6812b", "#b74bd6", "#d64545", "#2b9fd6"];
-const DEF = { theme: "system", accent: "#2f55f0", compact: false, hide: true, width: 0, height: 0, fullscreen: false, profile: 1, ram: 4, jvm: "", snapshots: false, pack: true };
+const DEF = { theme: "system", accent: "#2f55f0", compact: false, hide: true, width: 0, height: 0, fullscreen: false, profile: 1, ram: 4, jvm: "", java: "", snapshots: false, pack: true };
 let S = { ...DEF };
 try { S = { ...DEF, ...JSON.parse(localStorage.getItem("plume.s") || "{}") }; } catch (_) {}
 function ink(hex) { const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150 ? "#101820" : "#fff"; }
@@ -84,16 +84,18 @@ function applyS() {
   document.body.classList.toggle("compact", !!S.compact);
 }
 const saveS = () => { localStorage.setItem("plume.s", JSON.stringify(S)); applyS(); };
-const launchOpts = i => ({ ramGb: i.ram_gb || S.ram, nice: P[S.profile].nice, jvmArgs: S.jvm, profile: S.profile, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
+const launchOpts = i => ({ ramGb: i.ram_gb || S.ram, nice: P[S.profile].nice, jvmArgs: S.jvm, javaPath: S.java, profile: S.profile, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
 
 // ---------- État ----------
 let insts = [], curId = localStorage.getItem("plume.cur"), acct = null, dev = null, page = "home", modsTab = "inst";
 const curInst = () => insts.find(i => i.id === curId);
-const R = { home: renderHome, inst: renderInsts, mods: renderMods, set: renderSettings };
+const R = { home: renderHome, inst: renderInsts, mods: renderMods, logs: renderLogs, set: renderSettings };
+const running = new Set(), stopping = new Set();
 function go(p) {
   page = p;
   $$(".v").forEach(v => v.classList.toggle("on", v.id === "p-" + p));
   $$("#nav button[data-p]").forEach(b => b.classList.toggle("on", b.dataset.p === p));
+  stopLogs();
   R[p]();
 }
 async function loadInsts() {
@@ -107,7 +109,9 @@ function ago(ts) {
   const d = Math.floor((Date.now() / 1000 - ts) / 86400);
   return d <= 0 ? "jouée aujourd’hui" : d === 1 ? "jouée hier" : "jouée il y a " + d + " jours";
 }
-const desc = i => (i.loader === "fabric" ? "Fabric" : "Vanilla") + " · Minecraft " + i.version + (i.loader === "fabric" ? " · " + i.mods + " mod" + (i.mods > 1 ? "s" : "") : "") + " · " + ago(i.last_played);
+const desc = i => (i.loader === "fabric" ? "Fabric" : "Vanilla") + " · Minecraft " + i.version + (i.loader === "fabric" ? " · " + i.mods + " mod" + (i.mods > 1 ? "s" : "") : "") + " · " + ago(i.last_played) + (i.playtime >= 60 ? " · " + dur(i.playtime) + " de jeu" : "");
+const dur = s => s < 3600 ? Math.floor(s / 60) + " min" : Math.floor(s / 3600) + " h " + String(Math.floor(s % 3600 / 60)).padStart(2, "0") + " min";
+const fmtBytes = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + " Go" : b >= 1048576 ? Math.round(b / 1048576) + " Mo" : Math.max(1, Math.round(b / 1024)) + " Ko";
 function avatar(i) {
   const a = h("div", { class: "av" }, (i.name.trim()[0] || "?").toUpperCase());
   a.style.background = /^#[0-9a-f]{6}$/i.test(i.color) ? i.color : DEF.accent;
@@ -179,21 +183,31 @@ async function login() {
 $("#lclose").addEventListener("click", () => $("#ovLogin").classList.remove("show"));
 
 // ---------- Jeu ----------
-async function crash(msg) {
+async function crash(msg, id) {
   $("#cmsg").textContent = msg; $("#clog").textContent = "";
-  try { $("#clog").textContent = await inv("read_log", { instanceId: curId }); } catch (_) {}
+  try { $("#clog").textContent = await inv("read_log", { instanceId: id || curId }); } catch (_) {}
   $("#ovCrash").classList.add("show");
 }
 async function play() {
   const i = curInst(); if (!i) return;
   showPrep("Préparation du jeu");
-  try {
-    const code = await inv("launch", { instanceId: i.id, opts: launchOpts(i) });
-    hidePrep(); await loadInsts(); R[page]();
-    if (code !== 0) await crash("Minecraft s’est arrêté avec le code " + code + ".");
-  } catch (err) { hidePrep(); await crash(errText(err)); }
+  try { await inv("launch", { instanceId: i.id, opts: launchOpts(i) }); running.add(i.id); hidePrep(); await loadInsts(); R[page](); }
+  catch (err) { hidePrep(); await crash(errText(err), i.id); }
 }
+async function stopGame() {
+  const i = curInst(); if (!i) return;
+  stopping.add(i.id);
+  try { await inv("stop_game", { instanceId: i.id }); } catch (err) { stopping.delete(i.id); toast(errText(err), "bad"); }
+}
+T.event.listen("game-exit", async e => {
+  const { id, code } = e.payload;
+  running.delete(id);
+  const intended = stopping.delete(id);
+  await loadInsts(); R[page]();
+  if (code !== 0 && !intended) await crash("Minecraft s’est arrêté avec le code " + code + ".", id);
+});
 $("#again").addEventListener("click", () => { $("#ovCrash").classList.remove("show"); play(); });
+$("#logs").addEventListener("click", () => { $("#ovCrash").classList.remove("show"); go("logs"); });
 $("#back").addEventListener("click", () => $("#ovCrash").classList.remove("show"));
 
 // ---------- Accueil ----------
@@ -207,8 +221,8 @@ function renderHome() {
   const sel = h("select", { class: "inp", "aria-label": "Instance active", onchange: e => { selectInst(e.target.value); renderHome(); } }, insts.map(x => h("option", { value: x.id }, x.name)));
   sel.value = i.id; sel.style.maxWidth = "260px";
   el.append(
-    h("div", { class: "hero" }, avatar(i), h("div", { class: "grow" }, h("h2", {}, i.name), h("p", { class: "mute" }, desc(i))),
-      h("button", { class: "play", disabled: !canPlay(), onclick: play }, "Jouer")),
+    h("div", { class: "hero" }, avatar(i), h("div", { class: "grow" }, h("h2", {}, i.name, running.has(i.id) && h("span", { class: "chip live" }, "En cours")), h("p", { class: "mute" }, desc(i))),
+      running.has(i.id) ? h("button", { class: "btn danger big", onclick: stopGame }, "Arrêter le jeu") : h("button", { class: "play", disabled: !canPlay(), onclick: play }, "Jouer")),
     insts.length > 1 ? card("Instance active", sel) : null,
     loginHint());
 }
@@ -275,10 +289,16 @@ function editInstModal(i) {
   rng.disabled = !custom;
   rng.addEventListener("input", () => { ramV = +rng.value; lab.textContent = ramV + " Go"; });
   const use = toggle(custom, v => { custom = v; rng.disabled = !v; });
+  const sz = h("small", {}, "Espace disque : calcul…");
+  inv("instance_size", { id: i.id }).then(b => { sz.textContent = "Espace disque : " + fmtBytes(b); }).catch(() => { sz.textContent = ""; });
   const body = h("div", {}, h("label", {}, "Nom"), name, h("label", {}, "Couleur"), sw,
     h("label", {}, "Mémoire (RAM)"), h("div", { class: "item" }, h("div", {}, "RAM propre à cette instance", h("small", {}, "Sinon, le réglage global est utilisé")), use),
     h("div", { class: "item" }, rng, lab),
     h("div", { class: "item" }, h("div", {}, "Vérifier les fichiers", h("small", {}, "Retélécharge ce qui manque au prochain lancement")), mbtn("Vérifier", async () => { try { await inv("repair_instance", { id: i.id }); toast("Les fichiers seront vérifiés au prochain lancement"); } catch (err) { toast(errText(err), "bad"); } })),
+    h("div", { class: "item" }, h("div", {}, "Dupliquer l’instance", h("small", {}, "Copie les mods, mondes et options")), mbtn("Dupliquer", async () => {
+      closeModal(); showPrep("Copie de l’instance");
+      try { await inv("duplicate_instance", { id: i.id }); await loadInsts(); hidePrep(); R[page](); toast("Instance dupliquée"); } catch (err) { hidePrep(); toast(errText(err), "bad"); } })),
+    sz,
     h("small", {}, "Version : Minecraft " + i.version + (i.loader === "fabric" ? " (Fabric " + (i.loader_version || "") + ")" : " (Vanilla)") + ". Pour changer de version, crée une nouvelle instance."));
   modal("Modifier l’instance", body, [mbtn("Annuler", closeModal), mbtn("Enregistrer", async () => {
     try { await inv("update_instance", { id: i.id, patch: { name: name.value, color, ram_gb: custom ? ramV : null } }); closeModal(); await loadInsts(); R[page](); toast("Instance modifiée"); }
@@ -310,12 +330,14 @@ async function drawInstalled(body, i) {
     list.length ? h("div", { class: "list" }, list.map(m => modItem(m, i, body))) : empty("Aucun mod installé. Va dans « Parcourir Modrinth »."));
 }
 function modItem(m, i, body) {
-  return h("div", { class: "item mod" }, icon(m.icon_url),
-    h("div", { class: "grow" }, h("b", {}, m.title, m.auto && h("span", { class: "chip" }, "dépendance")), h("small", {}, "Version " + m.version_number)),
+  const man = !!m.manual;
+  const call = op => man ? inv(op + "_file", { instanceId: i.id, filename: m.filename }) : inv(op, { instanceId: i.id, project: m.project_id });
+  return h("div", { class: "item mod" }, man ? h("div", { class: "ico" }) : icon(m.icon_url),
+    h("div", { class: "grow" }, h("b", {}, m.title, m.auto && h("span", { class: "chip" }, "dépendance"), man && h("span", { class: "chip" }, "manuel")), h("small", {}, man ? m.filename : "Version " + m.version_number)),
     h("div", { class: "ctl" },
-      toggle(m.enabled, async () => { try { await inv("mod_toggle", { instanceId: i.id, project: m.project_id }); } catch (err) { toast(errText(err), "bad"); drawInstalled(body, i); } }),
+      toggle(m.enabled, async () => { try { await call("mod_toggle"); } catch (err) { toast(errText(err), "bad"); drawInstalled(body, i); } }),
       h("button", { class: "btn sm danger", onclick: () => confirmBox("Retirer " + m.title + " ?", "Le fichier du mod sera supprimé de cette instance.", "Retirer", async () => {
-        try { await inv("mod_remove", { instanceId: i.id, project: m.project_id }); await loadInsts(); drawInstalled(body, i); } catch (err) { toast(errText(err), "bad"); } }) }, "Retirer")));
+        try { await call("mod_remove"); await loadInsts(); drawInstalled(body, i); } catch (err) { toast(errText(err), "bad"); } }) }, "Retirer")));
 }
 async function checkUpdates(i, body) {
   showPrep("Recherche de mises à jour");
@@ -364,6 +386,41 @@ function drawBrowse(body, i) {
   body.replaceChildren(inp, res, more); run(true);
 }
 
+// ---------- Logs ----------
+let logTimer = null;
+const stopLogs = () => { if (logTimer) { clearInterval(logTimer); logTimer = null; } };
+const logLabel = f => f.rel === "launcher.log" ? "Console du dernier lancement" : f.rel === "logs/latest.log" ? "Journal du jeu (latest.log)" : "Crash · " + new Date(f.modified * 1000).toLocaleString();
+const lvl = t => /\bERROR\b|\bFATAL\b|Exception|^\s+at |^Caused by/.test(t) ? "err" : /\bWARN\b/.test(t) ? "warn" : "info";
+async function renderLogs() {
+  stopLogs();
+  const el = $("#p-logs"), i = curInst();
+  el.replaceChildren(h("h1", {}, "Logs"), h("p", { class: "sub" }, "Ce que fait le jeu, utile en cas de problème. Pour les suivre en direct, désactive « Cacher le launcher » dans les paramètres."));
+  if (!i) { el.append(empty("Crée d’abord une instance.")); return; }
+  let files = [];
+  try { files = await inv("log_files", { instanceId: i.id }); } catch (err) { el.append(h("p", { class: "bad" }, errText(err))); return; }
+  if (!files.length) { el.append(empty("Aucun log pour cette instance. Lance le jeu une première fois.")); return; }
+  const sel = h("select", { class: "inp" }, files.map(f => h("option", { value: f.rel }, logLabel(f)))); sel.style.maxWidth = "300px";
+  const view = h("div", { class: "logview", tabindex: "0", role: "log" });
+  let off = 0, carry = "", auto = true, count = 0;
+  const addLine = t => { view.append(h("div", { class: "ln " + lvl(t) }, t || " ")); if (++count > 3000) { view.firstChild.remove(); count--; } };
+  async function pull(reset) {
+    if (reset) { view.replaceChildren(); off = 0; carry = ""; count = 0; }
+    let r; try { r = await inv("log_read", { instanceId: i.id, rel: sel.value, offset: off }); } catch (_) { return; }
+    if (r.reset) { view.replaceChildren(); carry = ""; count = 0; }
+    off = r.offset;
+    if (r.text) { const parts = (carry + r.text).split("\n"); carry = parts.pop(); parts.forEach(t => addLine(t.replace(/\r$/, ""))); }
+    else if (carry) { addLine(carry); carry = ""; }
+    if (auto) view.scrollTop = view.scrollHeight;
+  }
+  sel.addEventListener("change", () => pull(true));
+  const mode = seg([["all", "Tout"], ["warn", "Avertissements"], ["err", "Erreurs"]], "all", v => { view.className = "logview f-" + v; });
+  el.append(h("div", { class: "bar2 wrap" }, sel, mode, h("div", { class: "ctl" }, "Défiler", toggle(true, v => { auto = v; })),
+    h("button", { class: "btn", onclick: async () => { try { await navigator.clipboard.writeText([...view.children].map(x => x.textContent).join("\n")); toast("Logs copiés"); } catch (_) { toast("Copie impossible", "bad"); } } }, "Copier"),
+    h("button", { class: "btn", onclick: () => inv("open_folder", { id: i.id }) }, "Ouvrir le dossier")), view);
+  await pull(true);
+  logTimer = setInterval(() => { if (page === "logs") pull(false); }, 1000);
+}
+
 // ---------- Paramètres ----------
 function renderSettings() {
   const el = $("#p-set");
@@ -374,6 +431,8 @@ function renderSettings() {
   rng.addEventListener("change", () => { S.ram = +rng.value; saveS(); });
   const jvm = h("input", { class: "inp", type: "text", placeholder: "-XX:+UseZGC", value: S.jvm }); jvm.style.width = "260px";
   jvm.addEventListener("change", () => { S.jvm = jvm.value.trim(); saveS(); });
+  const jp = h("input", { class: "inp", type: "text", placeholder: "Automatique (recommandé)", value: S.java }); jp.style.width = "260px";
+  jp.addEventListener("change", () => { S.java = jp.value.trim(); saveS(); });
   const ver = h("span", {}, "…");
   el.replaceChildren(h("h1", {}, "Paramètres"), h("p", { class: "sub" }, "Tout est enregistré automatiquement."),
     card("Apparence",
@@ -387,7 +446,8 @@ function renderSettings() {
     card("Performance",
       row("Profil", "Éco : priorité basse. Performance : plus de mémoire.", seg(P.map((p, k) => [k, p.n]), S.profile, v => { S.profile = v; S.ram = P[v].ram; saveS(); renderSettings(); })),
       row("Mémoire par défaut (RAM)", "Chaque instance peut avoir la sienne", h("div", { class: "ctl" }, rng, lab)),
-      row("Arguments Java supplémentaires", "Pour utilisateurs avancés", jvm)),
+      row("Arguments Java supplémentaires", "Pour utilisateurs avancés", jvm),
+      row("Chemin de Java", "Vide = le Java adapté à chaque version, téléchargé automatiquement", jp)),
     accountCard(),
     card("À propos",
       row("Plume", null, ver),
@@ -410,5 +470,6 @@ $$("#nav button[data-p]").forEach(b => b.addEventListener("click", () => go(b.da
 applyS();
 (async () => {
   T.app.getVersion().then(v => { $("#appv").textContent = v; }).catch(() => {});
+  try { (await inv("running")).forEach(x => running.add(x)); } catch (_) {}
   await refreshAcct(); await loadInsts(); go("home"); checkSelfUpdate();
 })();

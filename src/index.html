@@ -12,6 +12,7 @@
   <button data-p="home" class="on"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Jouer</button>
   <button data-p="inst"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Instances</button>
   <button data-p="mods"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>Mods</button>
+  <button data-p="logs"><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg>Logs</button>
   <button data-p="set"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Paramètres</button>
   <div class="sp"></div>
   <div id="side-acc"></div>
@@ -22,6 +23,7 @@
   <section class="v on" id="p-home"></section>
   <section class="v" id="p-inst"></section>
   <section class="v" id="p-mods"></section>
+  <section class="v" id="p-logs"></section>
   <section class="v" id="p-set"></section>
 </main>
 <div id="toasts" aria-live="polite"></div>
@@ -29,7 +31,7 @@
 
 <div class="ov" id="ovPrep"><h2 id="ptitle">Préparation</h2><div class="pbar ind"><u id="pb"></u></div><p id="prog">Démarrage…</p></div>
 <div class="ov" id="ovLogin"><h2>Connexion Microsoft</h2><p>Ouvre <b id="lurl"></b> dans ton navigateur et entre ce code :</p><h1 id="lcode"></h1><p id="lerr">En attente de la connexion…</p><button class="btn" id="lclose">Fermer</button></div>
-<div class="ov" id="ovCrash"><h2 class="bad">Le jeu s’est arrêté</h2><p id="cmsg"></p><pre id="clog"></pre><div class="row"><button class="btn p" id="again">Relancer</button><button class="btn" id="back">Retour au launcher</button></div></div>
+<div class="ov" id="ovCrash"><h2 class="bad">Le jeu s’est arrêté</h2><p id="cmsg"></p><pre id="clog"></pre><div class="row"><button class="btn p" id="again">Relancer</button><button class="btn" id="logs">Voir les logs</button><button class="btn" id="back">Retour au launcher</button></div></div>
 <script src="app.js"></script>
 </body>
 </html>
