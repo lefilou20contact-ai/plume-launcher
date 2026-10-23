@@ -2,6 +2,8 @@
 
 use futures_util::{stream, StreamExt};
 use serde_json::Value;
+use sha1::{Digest, Sha1};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{collections::{BTreeMap, HashSet}, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::{Duration, UNIX_EPOCH}};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
@@ -13,6 +15,7 @@ mod modrinth;
 
 // Instances en cours de jeu (identifiant -> numéro de processus ; 0 = en préparation).
 static RUNNING: Mutex<BTreeMap<String, u32>> = Mutex::new(BTreeMap::new());
+static PART: AtomicU64 = AtomicU64::new(0);
 
 fn prog(app: &AppHandle, t: &str, d: u64, n: u64) {
     let _ = app.emit("progress", serde_json::json!({"t": t, "d": d, "n": n}));
@@ -23,7 +26,7 @@ fn e<E: ToString>(x: E) -> String { x.to_string() }
 fn root(app: &AppHandle) -> PathBuf { app.path().app_data_dir().expect("dossier de données") }
 
 fn client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder().user_agent(config::USER_AGENT).connect_timeout(Duration::from_secs(10)).pool_max_idle_per_host(64).build().map_err(e)
+    reqwest::Client::builder().user_agent(config::USER_AGENT).connect_timeout(Duration::from_secs(10)).read_timeout(Duration::from_secs(30)).pool_max_idle_per_host(64).build().map_err(e)
 }
 
 fn os_name() -> &'static str {
@@ -55,13 +58,32 @@ async fn get_json(c: &reqwest::Client, url: &str) -> Result<Value, String> {
     serde_json::from_str(&t).map_err(e)
 }
 
-async fn fetch(c: &reqwest::Client, url: &str, dest: &Path) -> Result<(), String> {
+async fn fetch(c: &reqwest::Client, url: &str, dest: &Path) -> Result<(), String> { fetch_sha1(c, url, dest, None).await }
+
+// Télécharge avec 3 essais ; vérifie la somme SHA-1 quand elle est connue ; écrit via un fichier temporaire unique.
+async fn fetch_sha1(c: &reqwest::Client, url: &str, dest: &Path, sha1: Option<&str>) -> Result<(), String> {
     if dest.exists() { return Ok(()) }
     if let Some(p) = dest.parent() { tokio::fs::create_dir_all(p).await.map_err(e)?; }
-    let b = c.get(url).send().await.map_err(e)?.error_for_status().map_err(e)?.bytes().await.map_err(e)?;
-    let tmp = dest.with_extension("part");
-    tokio::fs::write(&tmp, b).await.map_err(e)?;
-    tokio::fs::rename(&tmp, dest).await.map_err(e)
+    let mut last = String::new();
+    for attempt in 0..3u64 {
+        if attempt > 0 { tokio::time::sleep(Duration::from_millis(600 * attempt)).await; }
+        let got = async {
+            let b = c.get(url).send().await.map_err(e)?.error_for_status().map_err(e)?.bytes().await.map_err(e)?;
+            if let Some(h) = sha1 {
+                if format!("{:x}", Sha1::digest(&b)) != h.to_lowercase() { return Err(format!("somme de contrôle invalide ({url})")); }
+            }
+            Ok::<_, String>(b)
+        }.await;
+        match got {
+            Ok(b) => {
+                let tmp = dest.with_extension(format!("part{}", PART.fetch_add(1, Ordering::Relaxed)));
+                tokio::fs::write(&tmp, &b).await.map_err(e)?;
+                return tokio::fs::rename(&tmp, dest).await.map_err(e);
+            }
+            Err(m) => last = m,
+        }
+    }
+    Err(format!("Téléchargement impossible : {last}"))
 }
 
 fn sub(s: &str, vars: &[(&str, String)]) -> String {
@@ -128,16 +150,16 @@ async fn ensure_java(app: &AppHandle, c: &reqwest::Client, shared: &Path, v: &Va
         match f["type"].as_str() {
             Some("directory") => tokio::fs::create_dir_all(&dest).await.map_err(e)?,
             Some("file") => if let Some(u) = f["downloads"]["raw"]["url"].as_str() {
-                jobs.push((u.to_string(), dest, f["executable"] == true));
+                jobs.push((u.to_string(), dest, f["executable"] == true, f["downloads"]["raw"]["sha1"].as_str().map(String::from)));
             },
             _ => {}
         }
     }
     let n = jobs.len() as u64;
     let mut got = 0u64;
-    let mut st = stream::iter(jobs.into_iter().map(|(u, d, x)| {
+    let mut st = stream::iter(jobs.into_iter().map(|(u, d, x, sh)| {
         let c = c.clone();
-        async move { fetch(&c, &u, &d).await?; if x { make_exec(&d)?; } Ok::<(), String>(()) }
+        async move { fetch_sha1(&c, &u, &d, sh.as_deref()).await?; if x { make_exec(&d)?; } Ok::<(), String>(()) }
     })).buffer_unordered(16);
     while let Some(r) = st.next().await {
         r?; got += 1;
@@ -233,7 +255,7 @@ fn list_instances(app: AppHandle) -> Vec<Value> {
 }
 
 #[tauri::command]
-async fn create_instance(app: AppHandle, name: String, version: String, loader: String) -> Result<Value, String> {
+async fn create_instance(app: AppHandle, name: String, version: String, loader: String, mc_lang: Option<String>, profile: Option<u64>) -> Result<Value, String> {
     if version.is_empty() || version.len() > 40 || !version.chars().all(|c| c.is_ascii_alphanumeric() || ".-_".contains(c)) {
         return Err("Version invalide".into());
     }
@@ -242,14 +264,19 @@ async fn create_instance(app: AppHandle, name: String, version: String, loader: 
         "fabric" => Some(fabric_loader_version(&client()?, &version).await?),
         _ => return Err("Type d'instance inconnu".into()),
     };
-    instances::create(&app, &name, &version, &loader, lv)
+    let inst = instances::create(&app, &name, &version, &loader, lv)?;
+    instances::write_defaults(&app, inst["id"].as_str().unwrap_or(""), mc_lang.as_deref(), profile.unwrap_or(1));
+    Ok(inst)
 }
 
 #[tauri::command]
 fn update_instance(app: AppHandle, id: String, patch: Value) -> Result<Value, String> { instances::update(&app, &id, &patch) }
 
 #[tauri::command]
-fn delete_instance(app: AppHandle, id: String) -> Result<(), String> { instances::delete(&app, &id) }
+fn delete_instance(app: AppHandle, id: String) -> Result<(), String> {
+    if RUNNING.lock().map(|r| r.contains_key(&id)).unwrap_or(false) { return Err("Ferme le jeu avant de supprimer cette instance.".into()) }
+    instances::delete(&app, &id)
+}
 
 #[tauri::command]
 fn open_folder(app: AppHandle, id: Option<String>) -> Result<(), String> {
@@ -319,13 +346,10 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     let c = client()?;
 
     // Compte Microsoft obligatoire (mode test réservé aux builds de développement).
-    let sess = match auth::session(&c, &root(&app)).await {
-        Ok(s) => s,
-        Err(m) => match dev_session() {
-            Some(s) => s,
-            None => return Err(m),
-        },
-    };
+    let dev = dev_session();
+    if dev.is_none() && auth::active(&root(app)).is_none() { return Err("Connecte-toi avec Microsoft pour jouer.".into()) }
+    // Le renouvellement de la session se fait pendant la préparation du jeu.
+    let sess_task = { let (c2, dir) = (c.clone(), root(app)); tauri::async_runtime::spawn(async move { auth::session(&c2, &dir).await }) };
 
     // Version déjà téléchargée : aucune connexion nécessaire.
     let vjson = shared.join("versions").join(&version).join(format!("{version}.json"));
@@ -365,12 +389,12 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     let jar = shared.join("versions").join(&version).join(format!("{version}.jar"));
     if !fast {
         prog(&app, "Téléchargement du jeu", 0, 0);
-        fetch(&c, v["downloads"]["client"]["url"].as_str().ok_or("client.jar manquant")?, &jar).await?;
+        fetch_sha1(&c, v["downloads"]["client"]["url"].as_str().ok_or("client.jar manquant")?, &jar, v["downloads"]["client"]["sha1"].as_str()).await?;
     }
 
     let os = os_name();
     let mut classpath: Vec<String> = vec![];
-    let mut libs: Vec<(String, PathBuf)> = vec![];
+    let mut libs: Vec<(String, PathBuf, Option<String>)> = vec![];
     let mut natives_jars: Vec<PathBuf> = vec![];
     for l in v["libraries"].as_array().into_iter().flatten() {
         if !allowed(l.get("rules").unwrap_or(&Value::Null)) { continue }
@@ -378,7 +402,7 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
         if let (Some(p), Some(u)) = (a["path"].as_str(), a["url"].as_str()) {
             let dest = shared.join("libraries").join(p);
             classpath.push(dest.to_string_lossy().to_string());
-            libs.push((u.to_string(), dest));
+            libs.push((u.to_string(), dest, a["sha1"].as_str().map(String::from)));
         }
         if let Some(k) = l["natives"][os].as_str() {
             let k = k.replace("${arch}", if cfg!(target_pointer_width = "64") { "64" } else { "32" });
@@ -386,7 +410,7 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
             if let (Some(p), Some(u)) = (n["path"].as_str(), n["url"].as_str()) {
                 let dest = shared.join("libraries").join(p);
                 natives_jars.push(dest.clone());
-                libs.push((u.to_string(), dest));
+                libs.push((u.to_string(), dest, n["sha1"].as_str().map(String::from)));
             }
         }
     }
@@ -394,9 +418,9 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     if !fast {
         let nl = libs.len() as u64;
         let mut got = 0u64;
-        let mut st = stream::iter(libs.into_iter().map(|(u, d)| {
+        let mut st = stream::iter(libs.into_iter().map(|(u, d, h)| {
             let c = c.clone();
-            async move { fetch(&c, &u, &d).await }
+            async move { fetch_sha1(&c, &u, &d, h.as_deref()).await }
         })).buffer_unordered(16);
         while let Some(r) = st.next().await {
             r?; got += 1;
@@ -417,13 +441,14 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
         let total = objs.len();
         let mut done = 0;
         {
-            let jobs: Vec<(String, PathBuf)> = objs.iter().map(|(_, h)| (
+            let jobs: Vec<(String, PathBuf, String)> = objs.iter().map(|(_, h)| (
                 format!("https://resources.download.minecraft.net/{}/{}", &h[..2], h),
                 shared.join("assets").join("objects").join(&h[..2]).join(h),
+                h.clone(),
             )).collect();
-            let mut st = stream::iter(jobs.into_iter().map(|(url, dest)| {
+            let mut st = stream::iter(jobs.into_iter().map(|(url, dest, hash)| {
                 let c = c.clone();
-                async move { fetch(&c, &url, &dest).await }
+                async move { fetch_sha1(&c, &url, &dest, Some(hash.as_str())).await }
             })).buffer_unordered(48);
             while let Some(r) = st.next().await {
                 r?; done += 1;
@@ -457,6 +482,10 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     }
 
     let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+    let sess = match sess_task.await.map_err(e)? {
+        Ok(s) => s,
+        Err(m) => match dev { Some(s) => s, None => return Err(m) },
+    };
     let vars: Vec<(&str, String)> = vec![
         ("${auth_player_name}", sess.name.clone()),
         ("${version_name}", version.clone()),
@@ -519,6 +548,8 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
         c.arg("-n").arg(nice.to_string()).arg(&java);
         c
     } else { tokio::process::Command::new(&java) };
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000);
     let mut child = cmd.args(&args).current_dir(&game_dir)
         .stdout(Stdio::from(log)).stderr(Stdio::from(log2))
         .spawn().map_err(|_| format!("Impossible de lancer Java ({java})."))?;
@@ -682,11 +713,32 @@ async fn duplicate_instance(app: AppHandle, id: String) -> Result<Value, String>
 }
 
 #[tauri::command]
+fn diagnostics(app: AppHandle) -> String {
+    format!("Plume {}\nOS : {} ({})\nDonnées : {}\nInstances : {}\nComptes : {}",
+        app.package_info().version, std::env::consts::OS, std::env::consts::ARCH, root(&app).display(),
+        instances::load(&app).len(), auth::list(&root(&app)).len())
+}
+
+// Mémoire totale en Go (lue sous Linux ; ailleurs, l'interface propose une plage par défaut).
+#[tauri::command]
+fn system_ram() -> Option<u64> {
+    let t = std::fs::read_to_string("/proc/meminfo").ok()?;
+    let kb: u64 = t.lines().find(|l| l.starts_with("MemTotal:"))?.split_whitespace().nth(1)?.parse().ok()?;
+    Some(kb / 1_048_576)
+}
+
+#[tauri::command]
+async fn data_size(app: AppHandle) -> Result<u64, String> {
+    let d = root(&app);
+    tokio::task::spawn_blocking(move || dir_size(&d)).await.map_err(e)
+}
+
+#[tauri::command]
 fn logout(app: AppHandle) { auth::logout(&root(&app)) }
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") || !url.chars().all(|ch| ch.is_ascii_alphanumeric() || "/:.-_?=".contains(ch)) {
+    if !url.starts_with("https://") || !url.chars().all(|ch| ch.is_ascii_alphanumeric() || "/:.-_?=#".contains(ch)) {
         return Err("Adresse refusée".into());
     }
     let mut c = if cfg!(target_os = "windows") {
@@ -735,8 +787,12 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus(); }
+        }))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }

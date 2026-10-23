@@ -119,3 +119,11 @@ nav button.on::before{content:"";position:absolute;left:0;top:22%;bottom:22%;wid
 .bar2.wrap{flex-wrap:wrap;align-items:center;margin-bottom:12px}.bar2.wrap .seg{margin:0}.bar2 .ctl{display:flex;align-items:center;gap:8px;color:var(--mute)}
 .chip.live{background:var(--ok);color:#fff;margin-left:8px;animation:breathe 2s ease-in-out infinite}
 .btn.big{padding:13px 34px;font-size:16px;border-radius:11px}
+/* ---- Don, langues ---- */
+nav .donate:hover{color:#e0557a}
+.langs{display:grid;gap:8px;margin:8px 0}
+.lang{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:11px;background:var(--card);transition:border-color .15s,background .15s}
+.lang:hover{background:var(--sel)}.lang.on{border-color:var(--acc)}.lang b{display:block}
+.lang .pb{height:6px;border-radius:4px;background:var(--line);overflow:hidden;width:130px;flex:none}.lang .pb u{display:block;height:100%;background:var(--ok);border-radius:4px}
+.warn{color:#d6a02b;font-size:13px;margin-top:4px}
+.icard .acts{flex-wrap:wrap}

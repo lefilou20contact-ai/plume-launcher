@@ -133,3 +133,16 @@ pub fn copy_dir(src: &std::path::Path, dst: &std::path::Path) -> Result<(), Stri
     }
     Ok(())
 }
+
+// Réglages de départ d'une nouvelle instance : distance d'affichage selon le profil, langue du jeu.
+pub fn write_defaults(app: &AppHandle, id: &str, lang: Option<&str>, profile: u64) {
+    let Ok(d) = dir(app, id) else { return };
+    let p = d.join("options.txt");
+    if p.exists() { return }
+    let render = match profile { 0 => 6, 2 => 12, _ => 10 };
+    let mut t = format!("renderDistance:{render}\nonboardAccessibility:false\ntutorialStep:none\n");
+    if let Some(l) = lang {
+        if l.len() <= 6 && l.chars().all(|c| c.is_ascii_alphabetic() || c == '_') { t.push_str(&format!("lang:{l}\n")); }
+    }
+    let _ = std::fs::write(p, t);
+}

@@ -5,25 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plume, le launcher Minecraft léger</title>
 <meta name="description" content="Plume est un launcher Minecraft léger : instances, mods Modrinth, comptes Microsoft, logs en direct. Sans publicité ni boutique.">
+<meta property="og:title" content="Plume, le launcher Minecraft léger"><meta property="og:description" content="Plume est un launcher Minecraft léger : instances, mods Modrinth, comptes Microsoft, logs en direct. Sans publicité ni boutique."><meta property="og:type" content="website">
+<link rel="alternate" hreflang="fr" href="https://lefilou20contact-ai.github.io/plume-launcher/"><link rel="alternate" hreflang="en" href="https://lefilou20contact-ai.github.io/plume-launcher/en/"><link rel="alternate" hreflang="x-default" href="https://lefilou20contact-ai.github.io/plume-launcher/">
 <style>
 :root{--bg:#f4f7fa;--card:#fff;--ink:#14212a;--mute:#5a6b75;--line:#dbe3e9;--acc:#2f55f0;--accink:#fff;--soft:rgba(47,85,240,.09);--ok:#1f9d63;--warn:#b7791f;--r:16px}
 @media (prefers-color-scheme:dark){:root{--bg:#0d141a;--card:#151f27;--ink:#e8eff3;--mute:#92a4ae;--line:#25333d;--acc:#7b94ff;--accink:#0b1220;--soft:rgba(123,148,255,.13);--ok:#3ccf8e;--warn:#e6b450}}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
+*{box-sizing:border-box}html{scroll-behavior:smooth}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-a{color:var(--acc)}h1,h2,h3{line-height:1.15;margin:0}
-.wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+a{color:var(--acc)}h1,h2,h3{line-height:1.15;margin:0}.wrap{max-width:1040px;margin:0 auto;padding:0 22px}
 header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 header .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;color:var(--ink);text-decoration:none}
-.logo{width:28px;height:28px;border-radius:50%;background:var(--acc);position:relative}
-.logo::after{content:"";position:absolute;inset:7px 5px;background:#fff;border-radius:60% 40%;transform:rotate(-35deg)}
-nav a{color:var(--mute);text-decoration:none;margin-left:22px;font-size:15px;font-weight:500}nav a:hover{color:var(--ink)}
+.logo{width:28px;height:28px;border-radius:50%;background:var(--acc);position:relative}.logo::after{content:"";position:absolute;inset:7px 5px;background:#fff;border-radius:60% 40%;transform:rotate(-35deg)}
+nav{display:flex;align-items:center}nav a{color:var(--mute);text-decoration:none;margin-left:20px;font-size:15px;font-weight:500}nav a:hover{color:var(--ink)}
+nav a.lg{border:1px solid var(--line);border-radius:8px;padding:2px 10px;font-weight:700;color:var(--ink)}
 .btn{display:inline-block;padding:13px 26px;border-radius:12px;font-weight:700;text-decoration:none;border:1px solid var(--line);color:var(--ink);background:var(--card);transition:transform .15s,box-shadow .2s}
 .btn:hover{transform:translateY(-2px)}.btn.p{background:var(--acc);color:var(--accink);border-color:var(--acc);box-shadow:0 8px 24px var(--soft)}
 .hero{padding:72px 0 56px;display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
 .tag{display:inline-block;padding:4px 12px;border-radius:99px;background:var(--soft);color:var(--acc);font-weight:700;font-size:13px;margin-bottom:18px}
-h1{font-size:clamp(34px,5.4vw,56px);letter-spacing:-.02em}.lead{color:var(--mute);font-size:19px;margin:18px 0 28px;max-width:520px}
-.cta{display:flex;gap:12px;flex-wrap:wrap}
+h1{font-size:clamp(34px,5.4vw,56px);letter-spacing:-.02em}.lead{color:var(--mute);font-size:19px;margin:18px 0 28px;max-width:520px}.cta{display:flex;gap:12px;flex-wrap:wrap}
 .mock{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 24px 60px rgba(0,0,0,.14);overflow:hidden;display:flex;min-height:250px}
 .mock .side{width:34%;background:var(--bg);border-right:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:9px}
 .mock .side i{display:block;height:12px;border-radius:6px;background:var(--line)}.mock .side i:first-child{background:var(--acc);width:60%}
@@ -33,143 +33,68 @@ h1{font-size:clamp(34px,5.4vw,56px);letter-spacing:-.02em}.lead{color:var(--mute
 .mock .play{padding:9px 20px;border-radius:9px;background:var(--acc);color:var(--accink);font-weight:800;font-size:14px;animation:pulse 3s ease-in-out infinite}
 .mock .bars{display:grid;gap:9px}.mock .bars i{display:block;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card)}
 @keyframes pulse{50%{box-shadow:0 0 0 8px var(--soft)}}
-section{padding:64px 0}section h2{font-size:clamp(26px,3.6vw,36px);margin-bottom:12px}.sub{color:var(--mute);max-width:640px;margin:0 0 34px}
+section{padding:64px 0;scroll-margin-top:60px}section h2{font-size:clamp(26px,3.6vw,36px);margin-bottom:12px}.sub{color:var(--mute);max-width:640px;margin:0 0 34px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px;transition:transform .2s,border-color .2s}.card:hover{transform:translateY(-3px);border-color:var(--acc)}
-.card h3{font-size:18px;margin-bottom:8px}.card p{margin:0;color:var(--mute);font-size:15.5px}
+.card h3{font-size:18px;margin-bottom:8px}.card p{margin:0 0 10px;color:var(--mute);font-size:15.5px}.card p:last-child{margin:0}
+.card .btn{padding:9px 18px;font-size:14.5px;margin-top:6px}
 .ico{width:40px;height:40px;border-radius:11px;background:var(--soft);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:800;margin-bottom:14px}
 .story{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}.story p{color:var(--mute);margin:0 0 16px}
-.tl{list-style:none;margin:0;padding:0 0 0 22px;border-left:2px solid var(--line)}
-.tl li{position:relative;padding:0 0 24px 18px}.tl li::before{content:"";position:absolute;left:-30px;top:6px;width:14px;height:14px;border-radius:50%;background:var(--acc);border:3px solid var(--bg)}
-.tl b{display:block}.tl span{color:var(--mute);font-size:15.5px}
+.tl{list-style:none;margin:0;padding:0 0 0 22px;border-left:2px solid var(--line)}.tl li{position:relative;padding:0 0 24px 18px}
+.tl li::before{content:"";position:absolute;left:-30px;top:6px;width:14px;height:14px;border-radius:50%;background:var(--acc);border:3px solid var(--bg)}.tl b{display:block}.tl span{color:var(--mute);font-size:15.5px}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--card)}
-table{border-collapse:collapse;width:100%;min-width:760px;font-size:15px}
-th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line)}tr:last-child td{border:0}
-thead th{font-size:14px;color:var(--mute);font-weight:700;position:sticky;top:0}
-th:nth-child(2),td:nth-child(2){background:var(--soft);font-weight:600}th:nth-child(2){color:var(--acc)}
-.y{color:var(--ok);font-weight:700}.n{color:var(--warn);font-weight:700}.u{color:var(--mute)}
-.note{color:var(--mute);font-size:14.5px;margin-top:14px;max-width:760px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:15px}th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line)}tr:last-child td{border:0}
+thead th{font-size:14px;color:var(--mute);font-weight:700}th:nth-child(2),td:nth-child(2){background:var(--soft);font-weight:600}th:nth-child(2){color:var(--acc)}
+.y{color:var(--ok);font-weight:700}.n{color:var(--warn);font-weight:700}.u{color:var(--mute)}.note{color:var(--mute);font-size:14.5px;margin-top:14px;max-width:760px}
 .road{display:flex;flex-wrap:wrap;gap:10px}.road span{padding:8px 16px;border-radius:99px;border:1px dashed var(--mute);color:var(--mute);font-size:15px}
 .dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:18px}
+#donate-links{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 4px}#donate-links .btn{margin:0}
 footer{border-top:1px solid var(--line);padding:34px 0 46px;color:var(--mute);font-size:14.5px}footer .wrap{display:flex;gap:22px;flex-wrap:wrap;justify-content:space-between}
 .rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}.rv.in{opacity:1;transform:none}
-@media(max-width:820px){.hero,.story{grid-template-columns:1fr}nav a:not(.keep){display:none}.hero{padding-top:44px}}
+@media(max-width:820px){.hero,.story{grid-template-columns:1fr}nav a:not(.keep):not(.lg){display:none}.hero{padding-top:44px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}html{scroll-behavior:auto}}
 </style>
 </head>
 <body>
 <header><div class="wrap">
   <a class="brand" href="#top"><span class="logo"></span>Plume</a>
-  <nav><a href="#besoin">Pourquoi</a><a href="#histoire">Histoire</a><a href="#fonctions">Fonctions</a><a href="#comparatif">Comparatif</a><a class="keep" href="#telecharger">Télécharger</a></nav>
+  <nav><a href="#besoin">Pourquoi</a><a href="#histoire">Histoire</a><a href="#fonctions">Fonctions</a><a href="#comparatif">Comparatif</a><a href="#soutenir">Soutenir</a><a class="keep" href="#telecharger">Télécharger</a><a class="lg" href="en/" hreflang="en" lang="en">EN</a></nav>
 </div></header>
-
 <main id="top">
 <div class="wrap hero">
   <div>
     <span class="tag">Bêta · Windows, macOS, Linux</span>
     <h1>Le launcher Minecraft qui reste léger.</h1>
     <p class="lead">Plume lance ton jeu, range tes instances et installe tes mods Modrinth. Sans publicité, sans boutique, sans lourdeur.</p>
-    <div class="cta"><a class="btn p" href="#telecharger">Télécharger</a><a class="btn" href="https://github.com/lefilou20contact-ai/plume-launcher">Voir le code</a></div>
+    <div class="cta"><a class="btn p" href="#telecharger">Télécharger</a><a class="btn" href="https://github.com/lefilou20contact-ai/plume-launcher">Voir le code</a><a class="btn" href="#soutenir">♥ Soutenir le projet</a></div>
   </div>
-  <div class="mock" aria-hidden="true">
-    <div class="side"><i></i><i></i><i></i><i></i></div>
-    <div class="main"><div class="row"><div class="av"></div><div class="l"><i></i><i></i></div><div class="play">Jouer</div></div><div class="bars"><i></i><i></i></div></div>
-  </div>
+  <div class="mock" aria-hidden="true"><div class="side"><i></i><i></i><i></i><i></i></div><div class="main"><div class="row"><div class="av"></div><div class="l"><i></i><i></i></div><div class="play">Jouer</div></div><div class="bars"><i></i><i></i></div></div></div>
 </div>
-
-<section id="besoin"><div class="wrap">
-  <h2 class="rv">Un launcher, trois idées simples</h2>
-  <p class="sub rv">Plume répond à un besoin précis : jouer, avec ses mods, depuis un outil qui ne pèse pas sur la machine.</p>
+<section id="besoin"><div class="wrap"><h2 class="rv">Un launcher, trois idées simples</h2><p class="sub rv">Plume répond à un besoin précis : jouer, avec ses mods, depuis un outil qui ne pèse pas sur la machine.</p><div class="grid"><div class="card rv"><div class="ico">1</div><h3>Léger par construction</h3><p>Écrit en Rust avec Tauri, sans navigateur lourd embarqué. Pendant la partie, le launcher se met en retrait et revient quand le jeu s’arrête ou plante.</p></div><div class="card rv"><div class="ico">2</div><h3>Des mods sans prise de tête</h3><p>Recherche Modrinth adaptée à ta version, dépendances installées automatiquement, fichiers vérifiés par somme de contrôle SHA-512.</p></div><div class="card rv"><div class="ico">3</div><h3>Honnête et transparent</h3><p>Aucune publicité, aucune boutique, code public. Connexion Microsoft officielle : il faut un compte qui possède Minecraft Java Edition.</p></div></div></div></section>
+<section id="histoire"><div class="wrap story"><div><h2 class="rv">Notre histoire</h2><p class="rv" style="margin-top:14px">Plume est né d’une envie simple : un launcher rapide à ouvrir, agréable à utiliser et léger à garder, comme les grands launchers du moment mais sans leur poids.</p><p class="rv">Le projet est parti d’une maquette, puis d’un launcher minimal capable de télécharger et de lancer le jeu. Chaque version ajoute ce qui manquait vraiment au quotidien : plusieurs instances, des mods, des logs lisibles.</p><p class="rv">Plume est un projet indépendant. Il n’est ni affilié ni approuvé par Mojang ou Microsoft.</p></div><ol class="tl rv"><li><b>L’idée</b><span>Un launcher léger, avec des mods de performance et une vraie gestion des instances.</span></li><li><b>Les premières versions</b><span>Lancement du jeu, fenêtre qui se cache pendant la partie, mises à jour automatiques.</span></li><li><b>Octobre 2026 · Connexion Microsoft</b><span>Mojang approuve l’application pour la connexion à un compte Minecraft.</span></li><li><b>Aujourd’hui</b><span>Instances Vanilla et Fabric, mods Modrinth, comptes multiples, logs en direct, personnalisation, français et anglais.</span></li><li><b>Ensuite</b><span>Plus de loaders, CurseForge, modpacks. Voir la feuille de route plus bas.</span></li></ol></div></section>
+<section id="fonctions"><div class="wrap"><h2 class="rv">Ce que Plume sait faire</h2><p class="sub rv">Tout ce qui est listé ici existe dans la version actuelle.</p><div class="grid"><div class="card rv"><div class="ico">▦</div><h3>Instances isolées</h3><p>Vanilla ou Fabric, chacune avec ses mods, ses mondes et ses réglages. Duplication en un clic, temps de jeu et taille sur le disque.</p></div><div class="card rv"><div class="ico">⬡</div><h3>Mods Modrinth</h3><p>Recherche, installation avec dépendances, activation, mises à jour. Les mods ajoutés à la main apparaissent aussi.</p></div><div class="card rv"><div class="ico">☺</div><h3>Comptes Microsoft</h3><p>Plusieurs comptes, avec la tête de ta peau. Jeu possible hors ligne jusqu’à 30 jours après la dernière vérification.</p></div><div class="card rv"><div class="ico">⚡</div><h3>Performance</h3><p>Profils Éco, Équilibré et Performance, mémoire réglable par instance, réglages Java adaptés. Une version déjà préparée se lance bien plus vite.</p></div><div class="card rv"><div class="ico">☕</div><h3>Java automatique</h3><p>Plume télécharge le Java adapté à chaque version de Minecraft. Tu peux aussi indiquer le tien.</p></div><div class="card rv"><div class="ico">≡</div><h3>Logs en direct</h3><p>Console du jeu, journal, rapports de crash. Filtres avertissements et erreurs, copie en un clic.</p></div><div class="card rv"><div class="ico">✎</div><h3>Personnalisation</h3><p>Thème clair, sombre ou système, six couleurs d’accent, mode compact, taille de fenêtre du jeu.</p></div><div class="card rv"><div class="ico">↻</div><h3>Mises à jour intégrées</h3><p>Le launcher se met à jour tout seul (AppImage sous Linux, Windows et macOS), sans tout retélécharger.</p></div><div class="card rv"><div class="ico">🌐</div><h3>Multilingue</h3><p>Français et anglais, avec un système de traduction ouvert : chaque langue affiche son pourcentage traduit.</p></div></div><p class="note">Toutes les versions officielles de Minecraft sont proposées. Les plus anciennes sont expérimentales et moins testées.</p></div></section>
+<section id="comparatif"><div class="wrap"><h2 class="rv">Comparatif</h2><p class="sub rv">Plume face à d’autres launchers connus, critère par critère.</p><div class="tw rv"><table><thead><tr><th>Critère</th><th>Plume</th><th>Modrinth App</th><th>Prism Launcher</th><th>Lunar Client</th></tr></thead><tbody><tr><td>Prix</td><td class="y">Gratuit</td><td>Gratuit</td><td>Gratuit</td><td>Gratuit, abonnement Lunar+ optionnel</td></tr><tr><td>Code source</td><td class="y">Public (GitHub)</td><td>Open source (GPLv3)</td><td>Open source (GPL-3.0)</td><td class="u">–</td></tr><tr><td>Technologie</td><td>Rust + Tauri</td><td>Rust + Tauri</td><td>Qt (natif)</td><td>Overwolf / Electron</td></tr><tr><td>Instances isolées</td><td class="y">Oui</td><td class="y">Oui</td><td class="y">Oui</td><td class="u">–</td></tr><tr><td>Mods Modrinth intégrés</td><td class="y">Oui</td><td class="y">Oui</td><td class="y">Oui</td><td>Modpacks</td></tr><tr><td>CurseForge</td><td class="n">Prévu</td><td class="u">–</td><td class="y">Oui</td><td class="y">Oui</td></tr><tr><td>Modpacks (.mrpack)</td><td class="n">Prévu</td><td class="y">Oui</td><td class="y">Oui</td><td class="y">Oui</td></tr><tr><td>Fabric</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="y">Oui</td></tr><tr><td>Forge, NeoForge, Quilt</td><td class="n">Prévu</td><td class="u">–</td><td class="y">Oui</td><td>NeoForge, Quilt</td></tr><tr><td>Comptes multiples</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="u">–</td></tr><tr><td>Java téléchargé automatiquement</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="u">–</td></tr><tr><td>Logs consultables</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="u">–</td></tr><tr><td>Cosmétiques, boutique</td><td class="n">Prévu</td><td class="u">–</td><td class="u">–</td><td>Oui, boutique payante</td></tr><tr><td>Publicité dans le launcher</td><td class="y">Aucune</td><td class="u">–</td><td class="u">–</td><td>Un emplacement (annonce de 2024)</td></tr><tr><td>Mises à jour automatiques</td><td class="y">Oui (AppImage, Windows, macOS)</td><td class="y">Oui</td><td class="u">–</td><td class="u">–</td></tr><tr><td>Maturité</td><td class="n">Bêta</td><td>Stable</td><td>Stable</td><td>Stable</td></tr></tbody></table></div><p class="note rv">Comparaison établie d’après les sites et annonces officiels de chaque projet, consultés en octobre 2026. « – » signifie information non vérifiée. Ces projets évoluent : vérifie sur leurs sites. Plume est en bêta et il lui manque encore plusieurs fonctions de ses aînés.</p></div></section>
+<section id="feuille"><div class="wrap"><h2 class="rv">Feuille de route</h2><p class="sub rv">Ce qui est prévu, sans date promise.</p><div class="road rv"><span>Forge, NeoForge, Quilt</span><span>CurseForge</span><span>Modpacks .mrpack</span><span>Shaders et packs de ressources</span><span>Cosmétiques via un mod dédié</span><span>Overlay de performance en jeu</span><span>Plus de langues</span></div></div></section>
+<section id="soutenir"><div class="wrap"><h2 class="rv">Soutenir le projet</h2><p class="sub rv">Plume est gratuit, sans publicité et sans boutique. Si le projet t’est utile, voici comment l’aider.</p>
   <div class="grid">
-    <div class="card rv"><div class="ico">1</div><h3>Léger par construction</h3><p>Écrit en Rust avec Tauri, sans navigateur lourd embarqué. Pendant la partie, le launcher se met en retrait et revient quand le jeu s’arrête ou plante.</p></div>
-    <div class="card rv"><div class="ico">2</div><h3>Des mods sans prise de tête</h3><p>Recherche Modrinth adaptée à ta version, dépendances installées automatiquement, fichiers vérifiés par somme de contrôle SHA-512.</p></div>
-    <div class="card rv"><div class="ico">3</div><h3>Honnête et transparent</h3><p>Aucune publicité, aucune boutique, code public. Connexion Microsoft officielle : il faut un compte qui possède Minecraft Java Edition.</p></div>
-  </div>
-</div></section>
-
-<section id="histoire"><div class="wrap story">
-  <div>
-    <h2 class="rv">Notre histoire</h2>
-    <p class="rv" style="margin-top:14px">Plume est né d’une envie simple : un launcher rapide à ouvrir, agréable à utiliser et léger à garder, comme les grands launchers du moment mais sans leur poids.</p>
-    <p class="rv">Le projet est parti d’une maquette, puis d’un launcher minimal capable de télécharger et de lancer le jeu. Chaque version ajoute ce qui manquait vraiment au quotidien : plusieurs instances, des mods, des logs lisibles.</p>
-    <p class="rv">Plume est un projet indépendant. Il n’est ni affilié ni approuvé par Mojang ou Microsoft.</p>
-  </div>
-  <ol class="tl rv">
-    <li><b>L’idée</b><span>Un launcher léger, avec des mods de performance et une vraie gestion des instances.</span></li>
-    <li><b>Les premières versions</b><span>Lancement du jeu, fenêtre qui se cache pendant la partie, mises à jour automatiques.</span></li>
-    <li><b>Octobre 2026 · Connexion Microsoft</b><span>Mojang approuve l’application pour la connexion à un compte Minecraft.</span></li>
-    <li><b>Aujourd’hui</b><span>Instances Vanilla et Fabric, mods Modrinth, comptes multiples, logs en direct, personnalisation.</span></li>
-    <li><b>Ensuite</b><span>Plus de loaders, CurseForge, modpacks. Voir la feuille de route plus bas.</span></li>
-  </ol>
-</div></section>
-
-<section id="fonctions"><div class="wrap">
-  <h2 class="rv">Ce que Plume sait faire</h2>
-  <p class="sub rv">Tout ce qui est listé ici existe dans la version actuelle.</p>
-  <div class="grid">
-    <div class="card rv"><div class="ico">▦</div><h3>Instances isolées</h3><p>Vanilla ou Fabric, chacune avec ses mods, ses mondes et ses réglages. Duplication en un clic, temps de jeu et taille sur le disque.</p></div>
-    <div class="card rv"><div class="ico">⬡</div><h3>Mods Modrinth</h3><p>Recherche, installation avec dépendances, activation, mises à jour. Les mods ajoutés à la main apparaissent aussi.</p></div>
-    <div class="card rv"><div class="ico">☺</div><h3>Comptes Microsoft</h3><p>Plusieurs comptes, avec la tête de ta peau. Jeu possible hors ligne jusqu’à 30 jours après la dernière vérification.</p></div>
-    <div class="card rv"><div class="ico">⚡</div><h3>Performance</h3><p>Profils Éco, Équilibré et Performance, mémoire réglable par instance, réglages Java adaptés. Une version déjà préparée se lance bien plus vite.</p></div>
-    <div class="card rv"><div class="ico">☕</div><h3>Java automatique</h3><p>Plume télécharge le Java adapté à chaque version de Minecraft. Tu peux aussi indiquer le tien.</p></div>
-    <div class="card rv"><div class="ico">≡</div><h3>Logs en direct</h3><p>Console du jeu, journal, rapports de crash. Filtres avertissements et erreurs, copie en un clic.</p></div>
-    <div class="card rv"><div class="ico">✎</div><h3>Personnalisation</h3><p>Thème clair, sombre ou système, six couleurs d’accent, mode compact, taille de fenêtre du jeu.</p></div>
-    <div class="card rv"><div class="ico">↻</div><h3>Mises à jour intégrées</h3><p>Le launcher se met à jour tout seul (AppImage sous Linux, Windows et macOS), sans tout retélécharger.</p></div>
-  </div>
-  <p class="note">Toutes les versions officielles de Minecraft sont proposées. Les plus anciennes sont expérimentales et moins testées.</p>
-</div></section>
-
-<section id="comparatif"><div class="wrap">
-  <h2 class="rv">Comparatif</h2>
-  <p class="sub rv">Plume face à d’autres launchers connus, critère par critère.</p>
-  <div class="tw rv"><table>
-    <thead><tr><th>Critère</th><th>Plume</th><th>Modrinth App</th><th>Prism Launcher</th><th>Lunar Client</th></tr></thead>
-    <tbody>
-    <tr><td>Prix</td><td class="y">Gratuit</td><td>Gratuit</td><td>Gratuit</td><td>Gratuit, abonnement Lunar+ optionnel</td></tr>
-    <tr><td>Code source</td><td class="y">Public (GitHub)</td><td>Open source (GPLv3)</td><td>Open source (GPL-3.0)</td><td class="u">–</td></tr>
-    <tr><td>Technologie</td><td>Rust + Tauri</td><td>Rust + Tauri</td><td>Qt (natif)</td><td>Overwolf / Electron</td></tr>
-    <tr><td>Instances isolées</td><td class="y">Oui</td><td class="y">Oui</td><td class="y">Oui</td><td class="u">–</td></tr>
-    <tr><td>Mods Modrinth intégrés</td><td class="y">Oui</td><td class="y">Oui</td><td class="y">Oui</td><td>Modpacks</td></tr>
-    <tr><td>CurseForge</td><td class="n">Prévu</td><td class="u">–</td><td class="y">Oui</td><td class="y">Oui</td></tr>
-    <tr><td>Modpacks (.mrpack)</td><td class="n">Prévu</td><td class="y">Oui</td><td class="y">Oui</td><td class="y">Oui</td></tr>
-    <tr><td>Fabric</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="y">Oui</td></tr>
-    <tr><td>Forge, NeoForge, Quilt</td><td class="n">Prévu</td><td class="u">–</td><td class="y">Oui</td><td>NeoForge, Quilt</td></tr>
-    <tr><td>Comptes multiples</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="u">–</td></tr>
-    <tr><td>Java téléchargé automatiquement</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="u">–</td></tr>
-    <tr><td>Logs consultables</td><td class="y">Oui</td><td class="u">–</td><td class="y">Oui</td><td class="u">–</td></tr>
-    <tr><td>Cosmétiques, boutique</td><td class="n">Prévu</td><td class="u">–</td><td class="u">–</td><td>Oui, boutique payante</td></tr>
-    <tr><td>Publicité dans le launcher</td><td class="y">Aucune</td><td class="u">–</td><td class="u">–</td><td>Un emplacement (annonce de 2024)</td></tr>
-    <tr><td>Mises à jour automatiques</td><td class="y">Oui</td><td class="y">Oui</td><td class="u">–</td><td class="u">–</td></tr>
-    <tr><td>Maturité</td><td class="n">Bêta</td><td>Stable</td><td>Stable</td><td>Stable</td></tr>
-    </tbody></table></div>
-  <p class="note rv">Comparaison établie d’après les sites et annonces officiels de chaque projet, consultés en octobre 2026. « – » signifie information non vérifiée. Ces projets évoluent : vérifie sur leurs sites. Plume est en bêta et il lui manque encore plusieurs fonctions de ses aînés.</p>
-</div></section>
-
-<section id="feuille"><div class="wrap">
-  <h2 class="rv">Feuille de route</h2>
-  <p class="sub rv">Ce qui est prévu, sans date promise.</p>
-  <div class="road rv"><span>Forge, NeoForge, Quilt</span><span>CurseForge</span><span>Modpacks .mrpack</span><span>Shaders et packs de ressources</span><span>Cosmétiques via un mod dédié</span><span>Overlay de performance en jeu</span><span>Version anglaise</span></div>
-</div></section>
-
-<section id="telecharger"><div class="wrap">
-  <h2 class="rv">Télécharger Plume</h2>
-  <p class="sub rv">Les installateurs sont publiés dans les Releases du dépôt, pour chaque nouvelle version.</p>
-  <div class="dl rv">
-    <div class="card"><h3>Linux</h3><p>AppImage (mises à jour automatiques) ou paquet .deb.</p></div>
-    <div class="card"><h3>Windows</h3><p>Installateur .msi ou .exe.</p></div>
-    <div class="card"><h3>macOS</h3><p>Image disque .dmg.</p></div>
-  </div>
-  <a class="btn p rv" href="https://github.com/lefilou20contact-ai/plume-launcher/releases/latest">Dernière version</a>
-  <p class="note rv">Plume n’est pas encore signé : Windows peut afficher un avertissement SmartScreen et macOS demander une confirmation à la première ouverture. Les versions Windows et macOS sont compilées automatiquement mais moins testées que celle de Linux.</p>
-</div></section>
+    <div class="card rv"><div class="ico">♥</div><h3>Faire un don</h3><p>Les dons financent le temps passé sur le projet. Ils sont facultatifs et ne débloquent aucune fonctionnalité.</p><div id="donate-links"></div><p id="donate-soon">Les dons ne sont pas encore ouverts. Reviens bientôt !</p></div>
+    <div class="card rv"><div class="ico">★</div><h3>Mettre une étoile</h3><p>Une étoile sur GitHub aide d’autres joueurs à découvrir Plume.</p><a class="btn" href="https://github.com/lefilou20contact-ai/plume-launcher">Ouvrir GitHub</a></div>
+    <div class="card rv"><div class="ico">!</div><h3>Signaler un problème</h3><p>Un bug, une idée, un détail qui manque ? Dis-le, ça fait avancer le projet.</p><a class="btn" href="https://github.com/lefilou20contact-ai/plume-launcher/issues">Ouvrir un ticket</a></div>
+    <div class="card rv"><div class="ico">🌐</div><h3>Traduire Plume</h3><p>Ajoute ta langue : les fichiers de traduction sont dans le dossier src/i18n, et le pourcentage traduit se calcule tout seul.</p><a class="btn" href="https://github.com/lefilou20contact-ai/plume-launcher/tree/main/src/i18n">Voir les traductions</a></div>
+    <div class="card rv"><div class="ico">☺</div><h3>En parler autour de toi</h3><p>Le bouche-à-oreille reste la meilleure aide pour un petit projet.</p></div>
+  </div></div></section>
+<section id="telecharger"><div class="wrap"><h2 class="rv">Télécharger Plume</h2><p class="sub rv">Les installateurs sont publiés dans les Releases du dépôt, pour chaque nouvelle version.</p>
+  <div class="dl rv"><div class="card"><h3>Linux</h3><p>AppImage (mises à jour automatiques) ou paquet .deb.</p></div><div class="card"><h3>Windows</h3><p>Installateur .msi ou .exe.</p></div><div class="card"><h3>macOS</h3><p>Image disque .dmg.</p></div></div>
+  <a class="btn p rv" href="https://github.com/lefilou20contact-ai/plume-launcher/releases/latest">Dernière version</a><p class="note rv">Plume n’est pas encore signé : Windows peut afficher un avertissement SmartScreen et macOS demander une confirmation à la première ouverture. Les versions Windows et macOS sont compilées automatiquement mais moins testées que celle de Linux.</p></div></section>
 </main>
-
-<footer><div class="wrap">
-  <div>© Plume · Projet indépendant, non affilié à Mojang ni à Microsoft. Minecraft est une marque de Mojang AB.</div>
-  <div><a href="https://github.com/lefilou20contact-ai/plume-launcher">GitHub</a> · <a href="https://github.com/lefilou20contact-ai/plume-launcher/issues">Signaler un problème</a></div>
-</div></footer>
-
+<footer><div class="wrap"><div>© Plume · Projet indépendant, non affilié à Mojang ni à Microsoft. Minecraft est une marque de Mojang AB.</div><div><a href="https://github.com/lefilou20contact-ai/plume-launcher">GitHub</a> · <a href="https://github.com/lefilou20contact-ai/plume-launcher/issues">Signaler un problème</a></div></div></footer>
 <script>
+// Liens de don : renseigne ceux que tu utilises (laisse "" pour masquer un bouton).
+// Donation links: fill in the ones you use (leave "" to hide a button).
+var DONATE = { "Ko-fi": "", "GitHub Sponsors": "", "Liberapay": "", "PayPal": "" };
+(function(){var box=document.getElementById("donate-links"),any=false;
+Object.keys(DONATE).forEach(function(k){if(/^https:\/\//.test(DONATE[k])){any=true;var a=document.createElement("a");a.className="btn p";a.href=DONATE[k];a.rel="noopener";a.textContent=k;box.appendChild(a)}});
+document.getElementById("donate-soon").hidden=any;})();
 (function(){var els=document.querySelectorAll(".rv");
 if(!("IntersectionObserver" in window)){els.forEach(function(e){e.classList.add("in")});return}
 var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add("in");io.unobserve(x.target)}})},{threshold:.12});
