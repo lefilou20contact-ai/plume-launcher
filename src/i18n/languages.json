@@ -17,10 +17,14 @@
  },
  {
   "code": "hi",
-  "name": "हिन्दी"
+  "name": "हिन्दi"
  },
  {
   "code": "es",
   "name": "Español"
+ },
+ {
+  "code": "ar",
+  "name": "العربية"
  }
 ]
