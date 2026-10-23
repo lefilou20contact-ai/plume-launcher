@@ -4,6 +4,7 @@
 //   node scripts/i18n.js check               erreurs (clés inconnues, variables, JSON) + clés utilisées dans le code
 //   node scripts/i18n.js missing <code>      clés pas encore traduites pour une langue
 //   node scripts/i18n.js new <code> "<Nom>"  crée une nouvelle langue (fichier vide + ajout à languages.json)
+//   node scripts/i18n.js merge-into <dossier>  copie les langues de ce projet vers <dossier> SANS écraser les traductions déjà présentes (utilisé par update.sh)
 const fs = require("fs"), path = require("path");
 const root = path.join(__dirname, "..");
 const dir = path.join(root, "src", "i18n");
@@ -34,6 +35,26 @@ if (cmd === "status" || !cmd) {
   fs.writeFileSync(f, JSON.stringify(o, null, 1) + "\n");
   if (!langs.find(l => l.code === a)) { langs.push({ code: a, name: b }); fs.writeFileSync(path.join(dir, "languages.json"), JSON.stringify(langs, null, 1) + "\n"); }
   console.log(`Créé : src/i18n/${a}.json (${refKeys.length} clés vides). Remplis les valeurs ; le % se calcule tout seul.`);
+} else if (cmd === "merge-into") {
+  const dest = a ? path.resolve(a) : "";
+  if (!dest || !fs.existsSync(dest)) { console.error("Usage : node scripts/i18n.js merge-into <dossier-destination>"); process.exit(1); }
+  const rd = f => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch (e) { return null; } };
+  const wr = (f, o) => fs.writeFileSync(f, JSON.stringify(o, null, 1) + "\n");
+  for (const f of fs.readdirSync(dir)) {
+    const src = path.join(dir, f), dst = path.join(dest, f);
+    if (f === "README.md" || !fs.existsSync(dst)) { fs.copyFileSync(src, dst); continue; }
+    if (f === "languages.json") { const s = rd(src) || [], d = rd(dst) || []; s.forEach(l => { if (!d.find(x => x.code === l.code)) d.push(l); }); wr(dst, d); continue; }
+    if (!f.endsWith(".json")) continue;
+    const s = rd(src) || {}, d = rd(dst);
+    if (!d) { fs.copyFileSync(src, dst); continue; }
+    let n = 0;
+    for (const k of Object.keys(s)) {
+      // On n'ajoute que les clés absentes ; seuls les messages du programme (rs.*, pg.*) du français sont toujours remis à jour.
+      if (!(k in d) || (f === "fr.json" && /^(rs|pg)\./.test(k) && d[k] !== s[k])) { d[k] = s[k]; n++; }
+    }
+    wr(dst, d);
+    if (n) console.log(`${f} : ${n} clé(s) ajoutée(s) ou mise(s) à jour`);
+  }
 } else if (cmd === "check") {
   let errors = 0; const err = m => { console.error("ERREUR  " + m); errors++; };
   for (const l of langs) {
