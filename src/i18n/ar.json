@@ -1,1 +1,21 @@
-
+{
+  "nav.play": "لعب",
+  "nav.instances": "النسخ",
+  "nav.mods": "الإضافات",
+  "nav.settings": "الإعدادات",
+  "c.play": "لعب",
+  "c.save": "حفظ",
+  "c.cancel": "إلغاء",
+  "home.title": "جاهز للعب",
+  "home.create_first": "أنشئ نسختي الأولى",
+  "inst.title": "النسخ",
+  "mods.title": "الإضافات",
+  "set.title": "الإعدادات",
+  "set.language": "اللغة",
+  "logs.title": "السجلات",
+  "toast.account_added": "تمت إضافة الحساب",
+  "toast.mods_updated": "تم تحديث الإضافات",
+  "toast.lang_updated": "تم تحديث الترجمات",
+  "set.lang_sync": "تحديث الترجمات تلقائيًا",
+  "set.lang_refresh": "تحديث الآن"
+}

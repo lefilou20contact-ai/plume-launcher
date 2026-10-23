@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "プレイ",
+  "nav.instances": "インスタンス",
+  "nav.mods": "Mod",
+  "nav.settings": "設定",
+  "c.play": "プレイ",
+  "c.save": "保存",
+  "c.cancel": "キャンセル",
+  "home.title": "プレイ準備完了",
+  "home.create_first": "最初のインスタンスを作成",
+  "inst.title": "インスタンス",
+  "mods.title": "Mod",
+  "set.title": "設定",
+  "set.language": "言語",
+  "logs.title": "ログ",
+  "toast.account_added": "アカウントを追加しました",
+  "toast.mods_updated": "Modを更新しました",
+  "toast.lang_updated": "翻訳を更新しました",
+  "set.lang_sync": "翻訳を自動更新",
+  "set.lang_refresh": "今すぐ更新"
+}

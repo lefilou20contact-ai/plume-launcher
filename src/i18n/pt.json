@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Jogar",
+  "nav.instances": "Instâncias",
+  "nav.mods": "Mods",
+  "nav.settings": "Configurações",
+  "c.play": "Jogar",
+  "c.save": "Salvar",
+  "c.cancel": "Cancelar",
+  "home.title": "Pronto para jogar",
+  "home.create_first": "Criar minha primeira instância",
+  "inst.title": "Instâncias",
+  "mods.title": "Mods",
+  "set.title": "Configurações",
+  "set.language": "Idioma",
+  "logs.title": "Logs",
+  "toast.account_added": "Conta adicionada",
+  "toast.mods_updated": "Mods atualizados",
+  "toast.lang_updated": "Traduções atualizadas",
+  "set.lang_sync": "Atualizar traduções automaticamente",
+  "set.lang_refresh": "Atualizar agora"
+}

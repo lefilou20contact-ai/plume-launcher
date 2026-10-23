@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Játék",
+  "nav.instances": "Példányok",
+  "nav.mods": "Modok",
+  "nav.settings": "Beállítások",
+  "c.play": "Játék",
+  "c.save": "Mentés",
+  "c.cancel": "Mégse",
+  "home.title": "Készen áll a játékra",
+  "home.create_first": "Hozzam létre az első példányomat",
+  "inst.title": "Példányok",
+  "mods.title": "Modok",
+  "set.title": "Beállítások",
+  "set.language": "Nyelv",
+  "logs.title": "Naplók",
+  "toast.account_added": "Fiók hozzáadva",
+  "toast.mods_updated": "Modok frissítve",
+  "toast.lang_updated": "Fordítások frissítve",
+  "set.lang_sync": "Fordítások automatikus frissítése",
+  "set.lang_refresh": "Frissítés most"
+}

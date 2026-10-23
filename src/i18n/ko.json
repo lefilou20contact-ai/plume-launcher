@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "플레이",
+  "nav.instances": "인스턴스",
+  "nav.mods": "모드",
+  "nav.settings": "설정",
+  "c.play": "플레이",
+  "c.save": "저장",
+  "c.cancel": "취소",
+  "home.title": "게임 준비 완료",
+  "home.create_first": "첫 인스턴스 만들기",
+  "inst.title": "인스턴스",
+  "mods.title": "모드",
+  "set.title": "설정",
+  "set.language": "언어",
+  "logs.title": "로그",
+  "toast.account_added": "계정 추가됨",
+  "toast.mods_updated": "모드 업데이트됨",
+  "toast.lang_updated": "번역 업데이트됨",
+  "set.lang_sync": "번역 자동 업데이트",
+  "set.lang_refresh": "지금 새로 고침"
+}

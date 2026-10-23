@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Oyna",
+  "nav.instances": "Örnekler",
+  "nav.mods": "Modlar",
+  "nav.settings": "Ayarlar",
+  "c.play": "Oyna",
+  "c.save": "Kaydet",
+  "c.cancel": "İptal",
+  "home.title": "Oynamaya hazırsınız",
+  "home.create_first": "İlk örneğimi oluştur",
+  "inst.title": "Örnekler",
+  "mods.title": "Modlar",
+  "set.title": "Ayarlar",
+  "set.language": "Dil",
+  "logs.title": "Loglar",
+  "toast.account_added": "Hesap eklendi",
+  "toast.mods_updated": "Modlar güncellendi",
+  "toast.lang_updated": "Çeviriler güncellendi",
+  "set.lang_sync": "Çevirileri otomatik güncelle",
+  "set.lang_refresh": "Şimdi yenile"
+}

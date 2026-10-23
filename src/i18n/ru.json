@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Играть",
+  "nav.instances": "Сервера",
+  "nav.mods": "Моды",
+  "nav.settings": "Настройки",
+  "c.play": "Играть",
+  "c.save": "Сохранить",
+  "c.cancel": "Отмена",
+  "home.title": "Готов к игре",
+  "home.create_first": "Создать мой первый мир",
+  "inst.title": "Миры",
+  "mods.title": "Моды",
+  "set.title": "Настройки",
+  "set.language": "Язык",
+  "logs.title": "Логи",
+  "toast.account_added": "Аккаунт добавлен",
+  "toast.mods_updated": "Моды обновлены",
+  "toast.lang_updated": "Переводы обновлены",
+  "set.lang_sync": "Автообновление переводов",
+  "set.lang_refresh": "Обновить сейчас"
+}

@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Spela",
+  "nav.instances": "Instanser",
+  "nav.mods": "Moddar",
+  "nav.settings": "Inställningar",
+  "c.play": "Spela",
+  "c.save": "Spara",
+  "c.cancel": "Avbryt",
+  "home.title": "Redo att spela",
+  "home.create_first": "Skapa min första instans",
+  "inst.title": "Instanser",
+  "mods.title": "Moddar",
+  "set.title": "Inställningar",
+  "set.language": "Språk",
+  "logs.title": "Loggar",
+  "toast.account_added": "Konto tillagt",
+  "toast.mods_updated": "Moddar uppdaterade",
+  "toast.lang_updated": "Översättningar uppdaterade",
+  "set.lang_sync": "Uppdatera översättningar automatiskt",
+  "set.lang_refresh": "Uppdatera nu"
+}

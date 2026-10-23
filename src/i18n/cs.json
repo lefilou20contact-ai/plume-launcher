@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Hrát",
+  "nav.instances": "Instance",
+  "nav.mods": "Mody",
+  "nav.settings": "Nastavení",
+  "c.play": "Hrát",
+  "c.save": "Uložit",
+  "c.cancel": "Zrušit",
+  "home.title": "Připraveno ke hře",
+  "home.create_first": "Vytvořit mou první instanci",
+  "inst.title": "Instance",
+  "mods.title": "Mody",
+  "set.title": "Nastavení",
+  "set.language": "Jazyk",
+  "logs.title": "Logy",
+  "toast.account_added": "Účet přidán",
+  "toast.mods_updated": "Mody aktualizovány",
+  "toast.lang_updated": "Překlady aktualizovány",
+  "set.lang_sync": "Automaticky aktualizovat překlady",
+  "set.lang_refresh": "Obnovit nyní"
+}

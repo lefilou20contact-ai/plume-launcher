@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Spelen",
+  "nav.instances": "Instanties",
+  "nav.mods": "Mods",
+  "nav.settings": "Instellingen",
+  "c.play": "Spelen",
+  "c.save": "Opslaan",
+  "c.cancel": "Annuleren",
+  "home.title": "Klaar om te spelen",
+  "home.create_first": "Maak mijn eerste instantie",
+  "inst.title": "Instanties",
+  "mods.title": "Mods",
+  "set.title": "Instellingen",
+  "set.language": "Taal",
+  "logs.title": "Logboeken",
+  "toast.account_added": "Account toegevoegd",
+  "toast.mods_updated": "Mods bijgewerkt",
+  "toast.lang_updated": "Vertalingen bijgewerkt",
+  "set.lang_sync": "Vertalingen automatisch bijwerken",
+  "set.lang_refresh": "Nu vernieuwen"
+}

@@ -1,1 +1,21 @@
-
+{
+  "nav.play": "开始游戏",
+  "nav.instances": "实例",
+  "nav.mods": "模组",
+  "nav.settings": "设置",
+  "c.play": "开始游戏",
+  "c.save": "保存",
+  "c.cancel": "取消",
+  "home.title": "准备开始游戏",
+  "home.create_first": "创建我的第一个实例",
+  "inst.title": "实例",
+  "mods.title": "模组",
+  "set.title": "设置",
+  "set.language": "语言",
+  "logs.title": "日志",
+  "toast.account_added": "账号已添加",
+  "toast.mods_updated": "模组已更新",
+  "toast.lang_updated": "翻译已更新",
+  "set.lang_sync": "自动更新翻译",
+  "set.lang_refresh": "立即刷新"
+}

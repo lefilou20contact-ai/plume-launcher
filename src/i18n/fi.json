@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Pela",
+  "nav.instances": "Instanssit",
+  "nav.mods": "Modit",
+  "nav.settings": "Asetukset",
+  "c.play": "Pelaa",
+  "c.save": "Tallenna",
+  "c.cancel": "Peruuta",
+  "home.title": "Valmis pelaamaan",
+  "home.create_first": "Luo ensimmäinen instanssini",
+  "inst.title": "Instanssit",
+  "mods.title": "Modit",
+  "set.title": "Asetukset",
+  "set.language": "Kieli",
+  "logs.title": "Lokit",
+  "toast.account_added": "Tili lisätty",
+  "toast.mods_updated": "Modit päivitetty",
+  "toast.lang_updated": "Käännökset päivitetty",
+  "set.lang_sync": "Päivitä käännökset automaattisesti",
+  "set.lang_refresh": "Päivitä nyt"
+}

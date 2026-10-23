@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Παίξε",
+  "nav.instances": "Δείγματα",
+  "nav.mods": "Mods",
+  "nav.settings": "Ρυθμίσεις",
+  "c.play": "Παίξε",
+  "c.save": "Αποθήκευση",
+  "c.cancel": "Ακύρωση",
+  "home.title": "Έτοιμος για παιχνίδι",
+  "home.create_first": "Δημιούργησε το πρώτο μου instance",
+  "inst.title": "Δείγματα",
+  "mods.title": "Mods",
+  "set.title": "Ρυθμίσεις",
+  "set.language": "Γλώσσα",
+  "logs.title": "Αρχεία καταγραφής",
+  "toast.account_added": "Ο λογαριασμός προστέθηκε",
+  "toast.mods_updated": "Τα mods ενημερώθηκαν",
+  "toast.lang_updated": "Οι μεταφράσεις ενημερώθηκαν",
+  "set.lang_sync": "Ενημέρωση μεταφράσεων αυτόματα",
+  "set.lang_refresh": "Ανανέωση τώρα"
+}

@@ -1,1 +1,21 @@
-{}
+{
+  "nav.play": "Joacă",
+  "nav.instances": "Instanțe",
+  "nav.mods": "Moduri",
+  "nav.settings": "Setări",
+  "c.play": "Joacă",
+  "c.save": "Salvează",
+  "c.cancel": "Anulează",
+  "home.title": "Pregătit pentru joc",
+  "home.create_first": "Creează prima mea instanță",
+  "inst.title": "Instanțe",
+  "mods.title": "Moduri",
+  "set.title": "Setări",
+  "set.language": "Limbă",
+  "logs.title": "Jurnale",
+  "toast.account_added": "Cont adăugat",
+  "toast.mods_updated": "Moduri actualizate",
+  "toast.lang_updated": "Traduceri actualizate",
+  "set.lang_sync": "Actualizează traducerile automat",
+  "set.lang_refresh": "Actualizează acum"
+}
