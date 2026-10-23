@@ -12,19 +12,191 @@
   "name": "Deutsch"
  },
  {
-  "code": "zh",
-  "name": "汉语"
- },
- {
-  "code": "hi",
-  "name": "हिन्दi"
- },
- {
   "code": "es",
   "name": "Español"
  },
  {
+  "code": "it",
+  "name": "Italiano"
+ },
+ {
+  "code": "pt",
+  "name": "Português"
+ },
+ {
+  "code": "ru",
+  "name": "Русский"
+ },
+ {
+  "code": "zh",
+  "name": "中文"
+ },
+ {
+  "code": "ja",
+  "name": "日本語"
+ },
+ {
+  "code": "ko",
+  "name": "한국어"
+ },
+ {
   "code": "ar",
   "name": "العربية"
+ },
+ {
+  "code": "tr",
+  "name": "Türkçe"
+ },
+ {
+  "code": "pl",
+  "name": "Polski"
+ },
+ {
+  "code": "nl",
+  "name": "Nederlands"
+ },
+ {
+  "code": "sv",
+  "name": "Svenska"
+ },
+ {
+  "code": "da",
+  "name": "Dansk"
+ },
+ {
+  "code": "fi",
+  "name": "Suomi"
+ },
+ {
+  "code": "nb",
+  "name": "Norsk"
+ },
+ {
+  "code": "el",
+  "name": "Ελληνικά"
+ },
+ {
+  "code": "cs",
+  "name": "Čeština"
+ },
+ {
+  "code": "hu",
+  "name": "Magyar"
+ },
+ {
+  "code": "ro",
+  "name": "Română"
+ },
+ {
+  "code": "sk",
+  "name": "Slovenčina"
+ },
+ {
+  "code": "sl",
+  "name": "Slovenščina"
+ },
+ {
+  "code": "id",
+  "name": "Bahasa Indonesia"
+ },
+ {
+  "code": "vi",
+  "name": "Tiếng Việt"
+ },
+ {
+  "code": "th",
+  "name": "ไทย"
+ },
+ {
+  "code": "he",
+  "name": "עברית"
+ },
+ {
+  "code": "fa",
+  "name": "فارسی"
+ },
+ {
+  "code": "uk",
+  "name": "Українська"
+ },
+ {
+  "code": "hr",
+  "name": "Hrvatski"
+ },
+ {
+  "code": "sr",
+  "name": "Српски"
+ },
+ {
+  "code": "bg",
+  "name": "Български"
+ },
+ {
+  "code": "lt",
+  "name": "Lietuvių"
+ },
+ {
+  "code": "lv",
+  "name": "Latviešu"
+ },
+ {
+  "code": "et",
+  "name": "Eesti"
+ },
+ {
+  "code": "ca",
+  "name": "Català"
+ },
+ {
+  "code": "eu",
+  "name": "Euskara"
+ },
+ {
+  "code": "gl",
+  "name": "Galego"
+ },
+ {
+  "code": "af",
+  "name": "Afrikaans"
+ },
+ {
+  "code": "sw",
+  "name": "Kiswahili"
+ },
+ {
+  "code": "am",
+  "name": "አማርኛ"
+ },
+ {
+  "code": "bn",
+  "name": "বাংলা"
+ },
+ {
+  "code": "gu",
+  "name": "ગુજરાતી"
+ },
+ {
+  "code": "hi",
+  "name": "हिन्दी"
+ },
+ {
+  "code": "mr",
+  "name": "मराठी"
+ },
+ {
+  "code": "ne",
+  "name": "नेपाली"
+ },
+ {
+  "code": "ta",
+  "name": "தமிழ்"
+ },
+ {
+  "code": "te",
+  "name": "తెలుగు"
+ },
+ {
+  "code": "ur",
+  "name": "اردو"
  }
 ]
