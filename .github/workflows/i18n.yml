@@ -1,0 +1,16 @@
+name: i18n
+on:
+  push:
+    paths: ['src/i18n/**', 'src/app.js', 'src/index.html', 'scripts/i18n.js']
+  pull_request:
+    paths: ['src/i18n/**']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/i18n.js check
+      - run: node scripts/i18n.js status

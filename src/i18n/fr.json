@@ -269,5 +269,12 @@
  "pg.game": "Téléchargement du jeu",
  "pg.java_dl": "Téléchargement de Java",
  "pg.install": "Installation de {t}",
- "pg.mod_update": "Mise à jour de {t}"
+ "pg.mod_update": "Mise à jour de {t}",
+ "toast.lang_updated": "Traductions mises à jour",
+ "toast.lang_uptodate": "Traductions déjà à jour",
+ "toast.lang_fail": "Impossible de récupérer les traductions",
+ "set.lang_sync": "Mettre à jour les traductions automatiquement",
+ "set.lang_sync_hint": "Récupère les nouvelles langues depuis GitHub, sans mise à jour du launcher",
+ "set.lang_refresh": "Actualiser maintenant",
+ "crash.launch_title": "Impossible de lancer le jeu"
 }

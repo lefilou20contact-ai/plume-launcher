@@ -21,6 +21,7 @@ pub const BACKEND_ANON_KEY: &str = key!("PLUME_BACKEND_ANON_KEY");
 // --- Adresses publiques, sans clé ---
 pub const MOJANG_MANIFEST: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 pub const JAVA_RUNTIMES: &str = "https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
+pub const I18N_BASE: &str = "https://raw.githubusercontent.com/lefilou20contact-ai/plume-launcher/main/src/i18n/";
 pub const MODRINTH_API: &str = "https://api.modrinth.com/v2";
 pub const FABRIC_META: &str = "https://meta.fabricmc.net/v2";
 pub const USER_AGENT: &str = "Plume/1.0 (github.com/lefilou20contact-ai/plume-launcher)";

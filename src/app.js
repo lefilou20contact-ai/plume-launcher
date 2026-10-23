@@ -45,11 +45,37 @@ function pickLang() {
   lang = resolveLang(); CUR = (LANGS.find(l => l.code === lang) || {}).data || FR;
   document.documentElement.lang = lang; applyStatic(); renderSide(); if (R[page]) R[page]();
 }
+const LANGOK = c => typeof c === "string" && /^[a-z]{2,3}(-[A-Za-z]{2})?$/.test(c);
+const vars = x => (String(x).match(/\{\w+\}/g) || []).sort().join(",");
+// On ignore toute traduction dont les variables {x} diffèrent du français (évite les textes cassés).
+const sanitize = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (typeof v === "string" && v.trim() && v.length <= 1000 && k in FR && vars(v) === vars(FR[k])) o[k] = v; } return o; };
+let BUNDLED = { list: [], files: {} };
 async function initI18n() {
-  try { FR = await jget("i18n/fr.json"); } catch (_) { FR = {}; }
-  try { LANGS = await jget("i18n/languages.json"); } catch (_) { LANGS = [{ code: "fr", name: "Français" }]; }
-  await Promise.all(LANGS.map(async l => { try { l.data = l.code === "fr" ? FR : await jget("i18n/" + l.code + ".json"); } catch (_) { l.data = {}; } l.pct = l.code === "fr" ? 100 : coverage(l.data); }));
-  buildRs();
+  let fr = {}, list = [{ code: "fr", name: "Français" }];
+  try { fr = await jget("i18n/fr.json"); } catch (_) {}
+  try { list = await jget("i18n/languages.json"); } catch (_) {}
+  const files = { fr };
+  await Promise.all(list.filter(l => l.code !== "fr").map(async l => { try { files[l.code] = await jget("i18n/" + l.code + ".json"); } catch (_) {} }));
+  BUNDLED = { list, files };
+  await mergeI18n();
+}
+// Fusionne les langues intégrées au launcher avec celles récupérées depuis GitHub (les plus récentes gagnent).
+async function mergeI18n() {
+  let c = null; try { c = await inv("i18n_load"); } catch (_) {}
+  const files = { ...BUNDLED.files, ...((c && c.files) || {}) };
+  const list = (c && Array.isArray(c.languages) ? c.languages : BUNDLED.list).filter(l => l && LANGOK(l.code) && typeof l.name === "string");
+  FR = files.fr || {}; buildRs();
+  LANGS = list.map(l => ({ code: l.code, name: l.name, data: sanitize(files[l.code]) }));
+  if (!LANGS.find(l => l.code === "fr")) LANGS.unshift({ code: "fr", name: "Français", data: FR });
+  LANGS.forEach(l => { l.pct = l.code === "fr" ? 100 : coverage(l.data); });
+}
+async function syncI18n(manual) {
+  if (!manual && !S.langSync) return;
+  try {
+    const changed = await inv("i18n_sync");
+    if (changed) { await mergeI18n(); pickLang(); toast(t("toast.lang_updated")); }
+    else if (manual) toast(t("toast.lang_uptodate"));
+  } catch (_) { if (manual) toast(t("toast.lang_fail"), "bad"); }
 }
 const MC_LANG = { fr: "fr_fr", en: "en_us", es: "es_es", de: "de_de", it: "it_it", pt: "pt_br", nl: "nl_nl", pl: "pl_pl", ru: "ru_ru", tr: "tr_tr", ja: "ja_jp", ko: "ko_kr", zh: "zh_cn" };
 const siteUrl = hash => SITE + (lang === "fr" ? "" : "en/") + (hash || "");
@@ -127,7 +153,7 @@ T.event.listen("progress", e => {
 // ---------- Réglages (personnalisation) ----------
 const PROFILES = [{ k: "prof.eco", ram: 2, nice: 10 }, { k: "prof.balanced", ram: 4, nice: 0 }, { k: "prof.perf", ram: 8, nice: 0 }];
 const COLORS = ["#2f55f0", "#1f9d63", "#d6812b", "#b74bd6", "#d64545", "#2b9fd6"];
-const DEF = { lang: "auto", theme: "system", accent: "#2f55f0", compact: false, hide: true, width: 0, height: 0, fullscreen: false, profile: 1, ram: 4, jvm: "", java: "", snapshots: false, pack: true };
+const DEF = { lang: "auto", langSync: true, theme: "system", accent: "#2f55f0", compact: false, hide: true, width: 0, height: 0, fullscreen: false, profile: 1, ram: 4, jvm: "", java: "", snapshots: false, pack: true };
 let S = { ...DEF };
 try { S = { ...DEF, ...JSON.parse(localStorage.getItem("plume.s") || "{}") }; } catch (_) {}
 function ink(hex) { const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150 ? "#101820" : "#fff"; }
@@ -140,7 +166,7 @@ function applyS() {
   document.body.classList.toggle("compact", !!S.compact);
 }
 const saveS = () => { localStorage.setItem("plume.s", JSON.stringify(S)); applyS(); };
-const launchOpts = i => ({ ramGb: i.ram_gb || S.ram, nice: PROFILES[S.profile].nice, jvmArgs: S.jvm, javaPath: S.java, profile: S.profile, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
+const launchOpts = i => ({ ramGb: clampRam(i.ram_gb || S.ram), nice: PROFILES[S.profile].nice, jvmArgs: S.jvm, javaPath: S.java, profile: S.profile, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
 
 // ---------- État ----------
 let insts = [], curId = localStorage.getItem("plume.cur"), acct = null, dev = null, page = "home", modsTab = "inst", instQuery = "", sysRam = null;
@@ -245,7 +271,8 @@ async function login() {
 $("#lclose").addEventListener("click", () => $("#ovLogin").classList.remove("show"));
 
 // ---------- Jeu ----------
-async function crash(msg, id) {
+async function crash(msg, id, launchFail) {
+  $("#ctitle").textContent = t(launchFail ? "crash.launch_title" : "crash.title");
   $("#cmsg").textContent = msg; $("#clog").textContent = "";
   try { $("#clog").textContent = await inv("read_log", { instanceId: id || curId }); } catch (_) {}
   $("#ovCrash").classList.add("show");
@@ -255,7 +282,7 @@ async function play(inst) {
   selectInst(i.id);
   showPrep(t("prep.game"));
   try { await inv("launch", { instanceId: i.id, opts: launchOpts(i) }); running.add(i.id); hidePrep(); await loadInsts(); R[page](); }
-  catch (err) { hidePrep(); await crash(errText(err), i.id); }
+  catch (err) { hidePrep(); await crash(errText(err), i.id, true); }
 }
 async function stopGame(inst) {
   const i = inst || curInst(); if (!i) return;
@@ -498,6 +525,7 @@ async function renderLogs() {
 }
 
 // ---------- Paramètres ----------
+const clampRam = r => sysRam ? Math.min(r, ramMax()) : r;
 const ramMax = () => sysRam ? Math.max(2, Math.min(32, sysRam - 1)) : 16;
 function langCard() {
   const bar = p => { const u = h("u"); u.style.width = p + "%"; return h("div", { class: "pb" }, u); };
@@ -506,7 +534,7 @@ function langCard() {
     b.addEventListener("click", () => { S.lang = code; saveS(); pickLang(); });
     return b;
   };
-  return card(t("set.language"), h("div", { class: "langs" }, opt("auto", t("set.lang_auto"), null), LANGS.map(l => opt(l.code, l.name, l.pct))), h("small", {}, t("set.lang_help")));
+  return card(t("set.language"), h("div", { class: "langs" }, opt("auto", t("set.lang_auto"), null), LANGS.map(l => opt(l.code, l.name, l.pct))), row(t("set.lang_sync"), t("set.lang_sync_hint"), h("div", { class: "ctl" }, h("button", { class: "btn sm", onclick: () => syncI18n(true) }, t("set.lang_refresh")), toggle(S.langSync, v => { S.langSync = v; saveS(); }))), h("small", {}, t("set.lang_help")));
 }
 function renderSettings() {
   const el = $("#p-set");
@@ -572,6 +600,7 @@ applyS();
   T.app.getVersion().then(v => { $("#appv").textContent = v; }).catch(() => {});
   await initI18n(); lang = resolveLang(); CUR = (LANGS.find(l => l.code === lang) || {}).data || FR; document.documentElement.lang = lang; applyStatic();
   try { sysRam = await inv("system_ram"); } catch (_) {}
+  if (sysRam && S.ram > ramMax()) { S.ram = ramMax(); saveS(); }
   try { (await inv("running")).forEach(x => running.add(x)); } catch (_) {}
-  await refreshAcct(); await loadInsts(); go("home"); checkSelfUpdate();
+  await refreshAcct(); await loadInsts(); go("home"); checkSelfUpdate(); syncI18n(false);
 })();

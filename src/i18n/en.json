@@ -269,5 +269,12 @@
  "pg.game": "Downloading the game",
  "pg.java_dl": "Downloading Java",
  "pg.install": "Installing {t}",
- "pg.mod_update": "Updating {t}"
+ "pg.mod_update": "Updating {t}",
+ "toast.lang_updated": "Translations updated",
+ "toast.lang_uptodate": "Translations already up to date",
+ "toast.lang_fail": "Couldn’t fetch translations",
+ "set.lang_sync": "Update translations automatically",
+ "set.lang_sync_hint": "Fetches new languages from GitHub, no launcher update needed",
+ "set.lang_refresh": "Refresh now",
+ "crash.launch_title": "Couldn’t start the game"
 }

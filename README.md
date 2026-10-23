@@ -8,7 +8,7 @@ Launcher Minecraft léger (Tauri + Rust).
 - Téléchargements vérifiés (SHA-1), relancés en cas d'échec, Java téléchargé automatiquement
 - Logs en direct, temps de jeu, duplication d'instance
 - Personnalisation : thème, couleur d'accent, mémoire, arguments Java, taille de fenêtre
-- Interface traduisible (français, anglais, + vos langues : voir `src/i18n/README.md`)
+- Interface traduisible, langues synchronisées automatiquement depuis GitHub (voir `src/i18n/README.md`)
 - Mises à jour automatiques du launcher (AppImage sous Linux)
 
 ## Développer (Linux)

@@ -719,18 +719,92 @@ fn diagnostics(app: AppHandle) -> String {
         instances::load(&app).len(), auth::list(&root(&app)).len())
 }
 
-// Mémoire totale en Go (lue sous Linux ; ailleurs, l'interface propose une plage par défaut).
-#[tauri::command]
-fn system_ram() -> Option<u64> {
+// Mémoire totale de l'ordinateur en Go.
+#[cfg(target_os = "macos")]
+fn ram_bytes() -> Option<u64> {
+    let o = std::process::Command::new("sysctl").args(["-n", "hw.memsize"]).output().ok()?;
+    String::from_utf8_lossy(&o.stdout).trim().parse().ok()
+}
+#[cfg(windows)]
+fn ram_bytes() -> Option<u64> {
+    use std::os::windows::process::CommandExt;
+    let o = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"])
+        .creation_flags(0x0800_0000).output().ok()?;
+    String::from_utf8_lossy(&o.stdout).trim().parse().ok()
+}
+#[cfg(all(unix, not(target_os = "macos")))]
+fn ram_bytes() -> Option<u64> {
     let t = std::fs::read_to_string("/proc/meminfo").ok()?;
     let kb: u64 = t.lines().find(|l| l.starts_with("MemTotal:"))?.split_whitespace().nth(1)?.parse().ok()?;
-    Some(kb / 1_048_576)
+    Some(kb * 1024)
 }
+
+#[tauri::command]
+fn system_ram() -> Option<u64> { ram_bytes().map(|b| b / 1_073_741_824) }
 
 #[tauri::command]
 async fn data_size(app: AppHandle) -> Result<u64, String> {
     let d = root(&app);
     tokio::task::spawn_blocking(move || dir_size(&d)).await.map_err(e)
+}
+
+fn valid_lang(c: &str) -> bool {
+    let (a, b) = match c.split_once('-') { Some((a, b)) => (a, Some(b)), None => (c, None) };
+    (2..=3).contains(&a.len()) && a.chars().all(|x| x.is_ascii_lowercase())
+        && b.map_or(true, |b| b.len() == 2 && b.chars().all(|x| x.is_ascii_alphabetic()))
+}
+
+// Ne garde que des textes courts : un fichier de langue ne peut rien contenir d'autre.
+fn clean_lang(v: &Value) -> Option<Value> {
+    let o = v.as_object()?;
+    if o.len() > 2000 { return None }
+    let m: serde_json::Map<String, Value> = o.iter()
+        .filter(|(k, x)| k.len() <= 80 && x.as_str().map_or(false, |s| s.len() <= 1000))
+        .map(|(k, x)| (k.clone(), x.clone())).collect();
+    Some(Value::Object(m))
+}
+
+// Récupère les langues publiées sur GitHub : pas besoin d'une nouvelle version du launcher pour une traduction.
+#[tauri::command]
+async fn i18n_sync(app: AppHandle) -> Result<bool, String> {
+    let c = client()?;
+    let dir = root(&app).join("i18n");
+    let langs = get_json(&c, &format!("{}languages.json", config::I18N_BASE)).await?;
+    let list: Vec<Value> = langs.as_array().ok_or("Liste de langues invalide")?.iter()
+        .filter(|l| l["code"].as_str().map_or(false, valid_lang) && l["name"].as_str().map_or(false, |n| !n.is_empty() && n.chars().count() <= 40))
+        .take(60).cloned().collect();
+    tokio::fs::create_dir_all(&dir).await.map_err(e)?;
+    let mut codes: Vec<String> = list.iter().filter_map(|l| l["code"].as_str().map(String::from)).collect();
+    if !codes.iter().any(|x| x == "fr") { codes.push("fr".into()); }
+    let mut changed = false;
+    for code in &codes {
+        let Ok(v) = get_json(&c, &format!("{}{}.json", config::I18N_BASE, code)).await else { continue };
+        let Some(clean) = clean_lang(&v) else { continue };
+        let text = clean.to_string();
+        let p = dir.join(format!("{code}.json"));
+        if std::fs::read_to_string(&p).ok().as_deref() != Some(text.as_str()) { tokio::fs::write(&p, &text).await.map_err(e)?; changed = true; }
+    }
+    let ltext = Value::Array(list).to_string();
+    let lp = dir.join("languages.json");
+    if std::fs::read_to_string(&lp).ok().as_deref() != Some(ltext.as_str()) { tokio::fs::write(&lp, &ltext).await.map_err(e)?; changed = true; }
+    Ok(changed)
+}
+
+#[tauri::command]
+fn i18n_load(app: AppHandle) -> Value {
+    let dir = root(&app).join("i18n");
+    let rd = |n: &str| std::fs::read_to_string(dir.join(n)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
+    let langs = rd("languages.json");
+    let mut codes: Vec<String> = langs.as_ref().and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|l| l["code"].as_str().map(String::from)).collect()).unwrap_or_default();
+    codes.push("fr".into());
+    let mut files = serde_json::Map::new();
+    for code in codes {
+        if !valid_lang(&code) { continue }
+        if let Some(v) = rd(&format!("{code}.json")) { files.insert(code, v); }
+    }
+    serde_json::json!({"languages": langs, "files": files})
 }
 
 #[tauri::command]
@@ -792,7 +866,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![i18n_sync, i18n_load, diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }

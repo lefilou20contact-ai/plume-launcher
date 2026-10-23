@@ -4,6 +4,10 @@
 - Une clé vide (`""`) ou absente = non traduite. Elle s'affiche alors en français.
 - Le **pourcentage** d'une langue est calculé tout seul (clés traduites / clés du français), dans le launcher et avec `node scripts/i18n.js status`.
 
+## Synchronisation automatique
+Les langues sont récupérées depuis ce dossier sur GitHub (branche `main`) au démarrage du launcher : **un simple push suffit, aucune nouvelle version n'est nécessaire**. Les launchers affichent « Traductions mises à jour » et le pourcentage se recalcule.
+Un texte dont les variables `{x}` diffèrent du français est ignoré par le launcher (il garde alors le français pour cette phrase).
+
 ## Ajouter une langue
     node scripts/i18n.js new de "Deutsch"     # crée src/i18n/de.json (vide) et l'ajoute à languages.json
     node scripts/i18n.js missing de            # liste ce qu'il reste à traduire
