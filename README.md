@@ -23,5 +23,9 @@ Launcher Minecraft léger (Tauri + Rust).
 ## Site web
 Le dossier `docs/` contient le site (français à la racine, anglais dans `en/`), publié avec GitHub Pages.
 
+## Mettre à jour le projet depuis un zip
+    bash update.sh "message du commit" v0.2.5
+Récupère d'abord GitHub (nouvelles langues, liens de don), fusionne les traductions sans les écraser, puis envoie et crée le tag.
+
 ## Publier
     git tag v0.2.3 && git push origin v0.2.3   # trois nombres obligatoires

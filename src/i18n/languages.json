@@ -6,25 +6,5 @@
  {
   "code": "en",
   "name": "English"
- },
- {
-  "code": "de",
-  "name": "Deutsch"
- },
- {
-  "code": "zh"
-  "name": "汉语"
- },
- {
-  "code": "hi"
-  "name": "हिन्दी"
- },
- {
-  "code": "es"
-  "name": "Español"
- },
- {
-  "code": "ar"
-  "name: "العربية"
  }
 ]
