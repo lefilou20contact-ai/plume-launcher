@@ -146,3 +146,55 @@ pub fn write_defaults(app: &AppHandle, id: &str, lang: Option<&str>, profile: u6
     }
     let _ = std::fs::write(p, t);
 }
+
+// ---------- Export et fichiers déposés ----------
+fn add_dir(z: &mut zip::ZipWriter<std::fs::File>, base: &std::path::Path, cur: &std::path::Path, opt: zip::write::SimpleFileOptions, worlds: bool) -> Result<(), String> {
+    for f in std::fs::read_dir(cur).map_err(e)?.flatten() {
+        let ft = f.file_type().map_err(e)?;
+        let p = f.path();
+        let rel = p.strip_prefix(base).map_err(e)?.to_string_lossy().replace('\\', "/");
+        let top = rel.split('/').next().unwrap_or("");
+        if matches!(top, "logs" | "crash-reports" | "launcher.log" | "plume.jsa" | "plume-gc.log" | ".fabric" | ".mixin.out") || (!worlds && top == "saves") { continue }
+        if ft.is_dir() { add_dir(z, base, &p, opt, worlds)?; }
+        else if ft.is_file() {
+            z.start_file(rel, opt).map_err(e)?;
+            let mut r = std::fs::File::open(&p).map_err(e)?;
+            std::io::copy(&mut r, z).map_err(e)?;
+        }
+    }
+    Ok(())
+}
+
+/// Exporte une instance dans un .zip prêt à partager (dossier « exports »).
+pub fn export(app: &AppHandle, id: &str, worlds: bool) -> Result<PathBuf, String> {
+    use std::io::Write;
+    let inst = get(app, id).ok_or("Instance introuvable")?;
+    let src = dir(app, id)?;
+    let out_dir = root(app).join("exports");
+    std::fs::create_dir_all(&out_dir).map_err(e)?;
+    let out = out_dir.join(format!("{}-{}.zip", id, now()));
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&out).map_err(e)?);
+    let opt = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    z.start_file("plume-instance.json", opt).map_err(e)?;
+    z.write_all(serde_json::to_string_pretty(&inst).map_err(e)?.as_bytes()).map_err(e)?;
+    add_dir(&mut z, &src, &src, opt, worlds)?;
+    z.finish().map_err(e)?;
+    Ok(out)
+}
+
+/// Copie des fichiers glissés dans la fenêtre : .jar -> mods, .zip -> packs de ressources.
+pub fn add_files(app: &AppHandle, id: &str, paths: &[String]) -> Result<usize, String> {
+    let d = dir(app, id)?;
+    let mut n = 0;
+    for p in paths {
+        let src = std::path::Path::new(p);
+        let Some(name) = src.file_name().and_then(|x| x.to_str()) else { continue };
+        if name.len() > 150 || name.contains("..") || !src.is_file() { continue }
+        let lower = name.to_lowercase();
+        let sub = if lower.ends_with(".jar") { "mods" } else if lower.ends_with(".zip") { "resourcepacks" } else { continue };
+        std::fs::create_dir_all(d.join(sub)).map_err(e)?;
+        std::fs::copy(src, d.join(sub).join(name)).map_err(e)?;
+        n += 1;
+    }
+    Ok(n)
+}

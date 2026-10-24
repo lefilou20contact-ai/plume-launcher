@@ -172,7 +172,7 @@ const launchOpts = i => ({ ramGb: clampRam(i.ram_gb || S.ram), nice: PROFILES[S.
 let insts = [], curId = localStorage.getItem("plume.cur"), acct = null, dev = null, page = "home", modsTab = "inst", instQuery = "", sysRam = null;
 const running = new Set(), stopping = new Set();
 const curInst = () => insts.find(i => i.id === curId);
-const R = { home: renderHome, inst: renderInsts, mods: renderMods, logs: renderLogs, set: renderSettings };
+const R = { home: renderHome, inst: renderInsts, mods: renderMods, logs: renderLogs, lab: renderLab, set: renderSettings };
 function go(p) {
   page = p;
   $$(".v").forEach(v => v.classList.toggle("on", v.id === "p-" + p));
@@ -192,10 +192,11 @@ function ago(ts) {
   return d <= 0 ? t("d.today") : d === 1 ? t("d.yesterday") : t("d.days", { n: d });
 }
 const dur = s => s < 3600 ? t("dur.min", { n: Math.floor(s / 60) }) : t("dur.h", { h: Math.floor(s / 3600), m: String(Math.floor(s % 3600 / 60)).padStart(2, "0") });
-const loaderName = i => i.loader === "fabric" ? t("d.fabric") : t("d.vanilla");
+const LOADER_KEY = { vanilla: "d.vanilla", fabric: "d.fabric", quilt: "d.quilt", forge: "d.forge", neoforge: "d.neoforge" };
+const loaderName = i => t(LOADER_KEY[i.loader] || "d.vanilla");
 function desc(i) {
   const p = [loaderName(i), t("d.mc", { v: i.version })];
-  if (i.loader === "fabric") p.push(t("d.mods", { n: i.mods || 0 }));
+  if (i.loader !== "vanilla") p.push(t("d.mods", { n: i.mods || 0 }));
   p.push(ago(i.last_played));
   if (i.playtime >= 60) p.push(t("d.playtime", { t: dur(i.playtime) }));
   return p.join(" · ");
@@ -319,7 +320,12 @@ function renderHome() {
 }
 
 // ---------- Instances ----------
+let instTab = "mine";
 function renderInsts() {
+  const el = $("#p-inst");
+  const tabs = seg([["mine", t("inst.tab_mine")], ["modpacks", t("inst.tab_modpacks")]], instTab, v => { instTab = v; renderInsts(); });
+  el.replaceChildren(h("div", { class: "head" }, h("div", {}, h("h1", {}, t("inst.title")), h("p", { class: "sub" }, t("inst.sub"))), h("button", { class: "btn p", onclick: () => newInstModal() }, t("inst.new"))), tabs);
+  if (instTab === "modpacks") { el.append(modpackBrowser()); return; }
   const grid = h("div", { class: "grid" });
   const fill = () => {
     const q = instQuery.trim().toLowerCase();
@@ -329,12 +335,51 @@ function renderInsts() {
   const search = h("input", { class: "inp", type: "search", placeholder: t("inst.search"), "aria-label": t("inst.search"), value: instQuery });
   search.style.maxWidth = "320px"; search.style.marginBottom = "14px";
   search.addEventListener("input", () => { instQuery = search.value; fill(); });
-  $("#p-inst").replaceChildren(
-    h("div", { class: "head" }, h("div", {}, h("h1", {}, t("inst.title")), h("p", { class: "sub" }, t("inst.sub"))), h("button", { class: "btn p", onclick: () => newInstModal() }, t("inst.new"))),
-    insts.length > 4 ? search : null,
-    insts.length ? grid : empty(t("inst.none")));
+  el.append(insts.length > 4 ? search : null, insts.length ? grid : empty(t("inst.none")));
   fill();
 }
+function modpackBrowser() {
+  const wrap = h("div"); let offset = 0, timer;
+  const inp = h("input", { class: "inp", type: "search", placeholder: t("mp.search_ph") });
+  const res = h("div", { class: "list" }), more = h("button", { class: "btn", hidden: true }, t("mods.more"));
+  async function run(reset) {
+    if (reset) { offset = 0; res.replaceChildren(skel(4)); }
+    try {
+      const r = await inv("mod_search_modpacks", { query: inp.value.trim(), offset });
+      if (reset) res.replaceChildren();
+      if (!r.hits.length && reset) res.append(empty(t("mp.none")));
+      r.hits.forEach(x => res.append(hitRow(x)));
+      offset += r.hits.length; more.hidden = offset >= r.total;
+    } catch (err) { res.replaceChildren(h("p", { class: "bad" }, errText(err))); }
+  }
+  function hitRow(x) {
+    const b = h("button", { class: "btn p sm" }, t("c.install"));
+    b.addEventListener("click", async () => {
+      b.disabled = true; showPrep(t("prep.modpack", { name: x.title }));
+      try { const inst = await inv("mod_install_modpack", { project: x.id }); selectInst(inst.id); hidePrep(); await loadInsts(); instTab = "mine"; go("inst"); toast(t("toast.mp_done", { name: inst.name })); }
+      catch (err) { hidePrep(); b.disabled = false; toast(errText(err), "bad"); }
+    });
+    return h("div", { class: "item mod" }, icon(x.icon_url), h("div", { class: "grow" }, h("b", {}, x.title), h("small", {}, x.description), h("small", {}, t("mods.by", { author: x.author, n: fmt(x.downloads) }))), b);
+  }
+  inp.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => run(true), 350); });
+  more.addEventListener("click", () => run(false));
+  wrap.append(h("small", {}, t("mp.hint")), inp, res, more); run(true);
+  return wrap;
+}
+async function importPack(path) {
+  showPrep(t("prep.import"));
+  try { const inst = await inv("import_mrpack", { path }); selectInst(inst.id); hidePrep(); await loadInsts(); instTab = "mine"; go("inst"); toast(t("toast.mp_done", { name: inst.name })); }
+  catch (err) { hidePrep(); toast(errText(err), "bad"); }
+}
+// Fichiers glissés dans la fenêtre : .mrpack = nouvelle instance ; .jar = mods ; .zip = packs de ressources.
+T.event.listen("tauri://drag-drop", async e => {
+  const paths = (e.payload && e.payload.paths) || [];
+  const packs = paths.filter(p => /\.mrpack$/i.test(p));
+  if (packs.length) { for (const p of packs) await importPack(p); return; }
+  const i = curInst(); if (!i) return;
+  try { const n = await inv("add_files", { instanceId: i.id, paths }); if (n) { await loadInsts(); R[page](); toast(t("toast.dropped", { n })); } else toast(t("toast.drop_none"), "bad"); }
+  catch (err) { toast(errText(err), "bad"); }
+});
 function instCard(i) {
   const on = i.id === curId, run = running.has(i.id);
   return h("div", { class: "icard" + (on ? " on" : ""), onclick: () => { selectInst(i.id); renderInsts(); } },
@@ -355,6 +400,7 @@ async function newInstModal(preset) {
   const pack = h("input", { type: "checkbox" }); pack.checked = S.pack;
   const packRow = h("label", { class: "chk" }, pack, t("new.pack"));
   packRow.hidden = loader !== "fabric";
+  const note = h("small", {}, t("new.forge_note")); note.hidden = !(loader === "forge" || loader === "neoforge");
   async function fill() {
     versionsOk = false; ver.replaceChildren(h("option", {}, t("c.loading")));
     try { const l = await inv("list_versions", { snapshots: snap.checked }); ver.replaceChildren(...l.map(v => h("option", { value: v }, v))); versionsOk = l.length > 0; }
@@ -363,7 +409,7 @@ async function newInstModal(preset) {
   snap.addEventListener("change", () => { S.snapshots = snap.checked; saveS(); fill(); });
   const body = h("div", {}, h("label", {}, t("new.name")), name, h("label", {}, t("new.version")), ver,
     h("label", { class: "chk" }, snap, t("new.snapshots")),
-    h("label", {}, t("new.type")), seg([["vanilla", t("new.vanilla")], ["fabric", t("new.fabric")]], loader, v => { loader = v; packRow.hidden = v !== "fabric"; }), packRow);
+    h("label", {}, t("new.type")), seg([["vanilla", t("new.vanilla")], ["fabric", "Fabric"], ["quilt", "Quilt"], ["forge", "Forge"], ["neoforge", "NeoForge"]], loader, v => { loader = v; packRow.hidden = v !== "fabric"; note.hidden = !(v === "forge" || v === "neoforge"); }), packRow, note);
   modal(t("new.title"), body, [mbtn(t("c.cancel"), closeModal), mbtn(t("c.create"), async () => {
     if (!name.value.trim()) { toast(t("toast.need_name"), "bad"); return; }
     if (!versionsOk) { toast(t("toast.need_version"), "bad"); return; }
@@ -392,6 +438,7 @@ function editInstModal(i) {
   rng.disabled = !custom;
   rng.addEventListener("input", () => { ramV = +rng.value; lab.textContent = ramV + " " + t("u.gb"); });
   const use = toggle(custom, v => { custom = v; rng.disabled = !v; });
+  const expW = h("input", { type: "checkbox" });
   const sz = h("small", {}, t("edit.disk_calc"));
   inv("instance_size", { id: i.id }).then(b => { sz.textContent = t("edit.disk", { size: fmtBytes(b) }); }).catch(() => { sz.textContent = ""; });
   const body = h("div", {}, h("label", {}, t("new.name")), name, h("label", {}, t("edit.color")), sw,
@@ -401,8 +448,11 @@ function editInstModal(i) {
     h("div", { class: "item" }, h("div", {}, t("edit.dup"), h("small", {}, t("edit.dup_hint"))), mbtn(t("c.duplicate"), async () => {
       closeModal(); showPrep(t("prep.copy"));
       try { await inv("duplicate_instance", { id: i.id }); await loadInsts(); hidePrep(); R[page](); toast(t("toast.duplicated")); } catch (err) { hidePrep(); toast(errText(err), "bad"); } })),
+    h("div", { class: "item" }, h("div", {}, t("edit.export"), h("small", {}, t("edit.export_hint"))), h("div", { class: "ctl" }, h("label", { class: "chk" }, expW, t("edit.export_worlds")), mbtn(t("edit.export"), async () => {
+      closeModal(); showPrep(t("prep.export"));
+      try { await inv("export_instance", { id: i.id, worlds: expW.checked }); hidePrep(); toast(t("toast.exported")); inv("open_exports"); } catch (err) { hidePrep(); toast(errText(err), "bad"); } }))),
     sz,
-    h("small", {}, t("edit.version_info", { v: i.version, loader: i.loader === "fabric" ? "Fabric " + (i.loader_version || "") : t("d.vanilla") })));
+    h("small", {}, t("edit.version_info", { v: i.version, loader: i.loader === "vanilla" ? t("d.vanilla") : loaderName(i) + " " + (i.loader_version || "") })));
   modal(t("edit.title"), body, [mbtn(t("c.cancel"), closeModal), mbtn(t("c.save"), async () => {
     try { await inv("update_instance", { id: i.id, patch: { name: name.value, color, ram_gb: custom ? ramV : null } }); closeModal(); await loadInsts(); R[page](); toast(t("toast.edited")); }
     catch (err) { toast(errText(err), "bad"); }
@@ -410,15 +460,12 @@ function editInstModal(i) {
 }
 
 // ---------- Mods (Modrinth) ----------
+let modsKind = "mod";
 async function renderMods() {
   const el = $("#p-mods"), i = curInst();
   el.replaceChildren(h("h1", {}, t("mods.title")));
   if (!i) { el.append(empty(t("c.need_instance"))); return; }
   el.append(h("p", { class: "sub" }, t("mods.instance", { name: i.name, v: i.version })));
-  if (i.loader !== "fabric") {
-    el.append(card(null, h("p", {}, t("mods.vanilla")), h("br"), h("button", { class: "btn p", onclick: () => newInstModal("fabric") }, t("mods.create_fabric"))));
-    return;
-  }
   const body = h("div");
   const draw = () => modsTab === "inst" ? drawInstalled(body, i) : drawBrowse(body, i);
   el.append(seg([["inst", t("mods.tab_installed")], ["browse", t("mods.tab_browse")]], modsTab, v => { modsTab = v; draw(); }), body);
@@ -436,7 +483,7 @@ function modItem(m, i, body) {
   const man = !!m.manual;
   const call = op => man ? inv(op + "_file", { instanceId: i.id, filename: m.filename }) : inv(op, { instanceId: i.id, project: m.project_id });
   return h("div", { class: "item mod" }, man ? h("div", { class: "ico" }) : icon(m.icon_url),
-    h("div", { class: "grow" }, h("b", {}, m.title, m.auto && h("span", { class: "chip" }, t("mods.dep")), man && h("span", { class: "chip" }, t("mods.manual"))), h("small", {}, man ? m.filename : t("mods.version", { v: m.version_number }))),
+    h("div", { class: "grow" }, h("b", {}, m.title, m.auto && h("span", { class: "chip" }, t("mods.dep")), man && h("span", { class: "chip" }, t("mods.manual")), m.kind === "shader" && h("span", { class: "chip" }, t("mods.chip_shader")), m.kind === "resourcepack" && h("span", { class: "chip" }, t("mods.chip_pack"))), h("small", {}, man ? m.filename : t("mods.version", { v: m.version_number }))),
     h("div", { class: "ctl" },
       toggle(m.enabled, async () => { try { await call("mod_toggle"); } catch (err) { toast(errText(err), "bad"); drawInstalled(body, i); } }),
       h("button", { class: "btn sm danger", onclick: () => confirmBox(t("mods.remove_title", { name: m.title }), t("mods.remove_text"), t("c.remove"), async () => {
@@ -457,15 +504,21 @@ async function checkUpdates(i, body) {
 }
 function drawBrowse(body, i) {
   let offset = 0, timer; const installed = new Set();
-  const inp = h("input", { class: "inp", type: "search", placeholder: t("mods.search_ph") });
+  const kinds = seg([["mod", t("mods.kind_mod")], ["shader", t("mods.kind_shader")], ["resourcepack", t("mods.kind_pack")]], modsKind, v => { modsKind = v; drawBrowse(body, i); });
+  if (modsKind === "mod" && i.loader === "vanilla") {
+    body.replaceChildren(kinds, card(null, h("p", {}, t("mods.vanilla_mods")), h("br"), h("button", { class: "btn p", onclick: () => newInstModal("fabric") }, t("mods.create_fabric"))));
+    return;
+  }
+  const kind = modsKind;
+  const inp = h("input", { class: "inp", type: "search", placeholder: kind === "shader" ? t("mods.search_ph_shader") : kind === "resourcepack" ? t("mods.search_ph_pack") : t("mods.search_ph") });
   const res = h("div", { class: "list" }), more = h("button", { class: "btn", hidden: true }, t("mods.more"));
   async function run(reset) {
     if (reset) { offset = 0; res.replaceChildren(skel(4)); }
     try {
-      const [r, l] = await Promise.all([inv("mod_search", { instanceId: i.id, query: inp.value.trim(), offset }), inv("mod_list", { instanceId: i.id })]);
+      const [r, l] = await Promise.all([inv("mod_search", { instanceId: i.id, query: inp.value.trim(), offset, kind }), inv("mod_list", { instanceId: i.id })]);
       l.forEach(m => { if (m.project_id) installed.add(m.project_id); });
       if (reset) res.replaceChildren();
-      if (!r.hits.length && reset) res.append(empty(t("mods.no_results", { v: i.version })));
+      if (!r.hits.length && reset) res.append(empty(t("mods.no_results2", { v: i.version })));
       r.hits.forEach(x => res.append(hit(x)));
       offset += r.hits.length; more.hidden = offset >= r.total;
     } catch (err) { res.replaceChildren(h("p", { class: "bad" }, errText(err))); }
@@ -476,7 +529,7 @@ function drawBrowse(body, i) {
     b.addEventListener("click", async () => {
       b.disabled = true; showPrep(t("prep.install_mod", { name: x.title }));
       try {
-        const a = await inv("mod_install", { instanceId: i.id, project: x.id }); hidePrep();
+        const a = await inv("mod_install", { instanceId: i.id, project: x.id, kind }); hidePrep();
         installed.add(x.id); b.textContent = t("c.installed"); await loadInsts();
         toast(a.length > 1 ? t("toast.mod_installed_deps", { name: x.title, n: a.length - 1 }) : t("toast.mod_installed", { name: x.title }));
       } catch (err) { hidePrep(); b.disabled = false; toast(errText(err), "bad"); }
@@ -486,7 +539,7 @@ function drawBrowse(body, i) {
   }
   inp.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => run(true), 350); });
   more.addEventListener("click", () => run(false));
-  body.replaceChildren(inp, res, more); run(true);
+  body.replaceChildren(kinds, inp, res, more); run(true);
 }
 
 // ---------- Logs ----------
@@ -522,6 +575,65 @@ async function renderLogs() {
     h("button", { class: "btn", onclick: () => inv("open_folder", { id: i.id }) }, t("c.open_folder"))), view);
   await pull(true);
   logTimer = setInterval(() => { if (page === "logs") pull(false); }, 1000);
+}
+
+// ---------- Plume Lab ----------
+const labHistory = id => { try { return JSON.parse(localStorage.getItem("plume.lab." + id) || "[]"); } catch (_) { return []; } };
+const saveLab = (id, r) => localStorage.setItem("plume.lab." + id, JSON.stringify([...labHistory(id), r].slice(-8)));
+let labBusy = false;
+T.event.listen("lab-progress", e => {
+  const p = e.payload, el = $("#labstatus"); if (!el || !curInst() || p.id !== curInst().id) return;
+  const s = Math.round(p.elapsed);
+  el.textContent = p.ready != null ? t("lab.live_ready", { s, r: Math.round(p.ready), m: p.rss_mb }) : t("lab.live_wait", { s, m: p.rss_mb });
+});
+function labReport(i, r, prev) {
+  const V = { ok: ["lab.verdict_ok", "ok"], crash: ["lab.verdict_crash", "bad"], timeout: ["lab.verdict_timeout", "bad"], unknown: ["lab.verdict_unknown", "warn"] };
+  const [vk, vc] = V[r.verdict] || V.unknown;
+  const na = t("lab.na"), sec = n => t("lab.secs", { n: Math.round(n * 10) / 10 }), mb = n => t("lab.mb", { n });
+  const delta = (a, b, f) => (a != null && b != null) ? ((a - b > 0 ? "+" : "") + f(a - b)) : "";
+  const list = (title, arr) => arr && arr.length ? h("div", {}, h("b", {}, title), h("ul", { class: "issues" }, arr.map(x => h("li", {}, x)))) : null;
+  const clean = !r.crash_report && !(r.mixin || []).length && !(r.deps || []).length && !r.errors;
+  return h("div", {},
+    h("div", { class: "verdict " + vc }, t(vk)),
+    card(null,
+      row(t("lab.m_ready"), prev ? t("lab.compare") + " : " + delta(r.ready_secs, prev.ready_secs, n => sec(n)) : null, r.ready_secs != null ? sec(r.ready_secs) : na),
+      row(t("lab.m_ram"), prev ? delta(r.peak_rss_mb, prev.peak_rss_mb, n => mb(n)) : null, r.peak_rss_mb ? mb(r.peak_rss_mb) : na),
+      row(t("lab.m_cpu"), null, r.cpu_cores != null ? t("lab.m_cpu_val", { n: r.cpu_cores }) : na),
+      row(t("lab.m_mods"), null, String(r.mods)),
+      row(t("lab.m_gc"), null, r.gc ? t("lab.m_gc_val", { n: r.gc.count, max: r.gc.max_ms, total: r.gc.total_ms }) : na),
+      row(t("lab.m_errors"), null, r.errors + " / " + r.warns)),
+    card(t("lab.issues"),
+      clean ? h("p", { class: "mute" }, t("lab.no_issue")) : null,
+      r.crash_report ? h("p", { class: "bad" }, t("lab.i_crash", { file: r.crash_report })) : null,
+      list(t("lab.i_mixin"), r.mixin), list(t("lab.i_deps"), r.deps), list(t("lab.i_errors"), r.samples)),
+    h("div", { class: "bar2" }, h("button", { class: "btn", onclick: async () => {
+      const md = ["# Plume Lab · " + i.name + " (" + i.version + ", " + loaderName(i) + ")", "", t(vk), "",
+        "- " + t("lab.m_ready") + " : " + (r.ready_secs != null ? sec(r.ready_secs) : na), "- " + t("lab.m_ram") + " : " + (r.peak_rss_mb ? mb(r.peak_rss_mb) : na),
+        "- " + t("lab.m_mods") + " : " + r.mods, "- " + t("lab.m_errors") + " : " + r.errors + " / " + r.warns,
+        ...(r.mixin || []).map(x => "- Mixin : " + x), ...(r.deps || []).map(x => "- " + x)].join("\n");
+      try { await navigator.clipboard.writeText(md); toast(t("lab.copied")); } catch (_) { toast(t("toast.copy_fail"), "bad"); } } }, t("lab.copy"))));
+}
+async function renderLab() {
+  const el = $("#p-lab"), i = curInst();
+  el.replaceChildren(h("h1", {}, t("lab.title")), h("p", { class: "sub" }, t("lab.sub")));
+  if (!i) { el.append(empty(t("c.need_instance"))); return; }
+  const secs = h("input", { class: "inp", type: "number", min: "5", max: "300", value: String(S.labSeconds || 20), "aria-label": t("lab.settle") }); secs.style.width = "100px";
+  const status = h("p", { class: "mute", id: "labstatus" }), out = h("div");
+  const run = h("button", { class: "btn p", disabled: labBusy || running.has(i.id) || !(acct || dev) }, t("lab.run"));
+  run.addEventListener("click", async () => {
+    labBusy = true; run.disabled = true; out.replaceChildren(); status.textContent = t("lab.starting");
+    S.labSeconds = Math.max(5, Math.min(300, +secs.value || 20)); saveS();
+    stopping.add(i.id);
+    try {
+      const r = await inv("lab_run", { instanceId: i.id, seconds: S.labSeconds });
+      const prev = labHistory(i.id).slice(-1)[0]; saveLab(i.id, r);
+      status.textContent = ""; out.replaceChildren(labReport(i, r, prev));
+    } catch (err) { stopping.delete(i.id); status.textContent = ""; toast(errText(err), "bad"); }
+    labBusy = false; run.disabled = false; await loadInsts();
+  });
+  el.append(card(t("lab.run_title"), row(t("lab.settle"), t("lab.settle_hint"), secs), h("div", { class: "bar2" }, run), status), out);
+  const hist = labHistory(i.id);
+  if (hist.length) out.append(labReport(i, hist[hist.length - 1], hist[hist.length - 2]));
 }
 
 // ---------- Paramètres ----------
@@ -565,6 +677,7 @@ function renderSettings() {
       row(t("set.ram"), t("set.ram_hint"), h("div", {}, h("div", { class: "ctl" }, rng, lab), warn)),
       row(t("set.jvm"), t("set.jvm_hint"), jvm),
       row(t("set.java"), t("set.java_hint"), jp)),
+    card(t("set.cosmetics"), row(t("set.cosmetics"), t("set.cosmetics_hint"), h("span", { class: "chip" }, t("c.soon")))),
     accountCard(),
     card(t("set.about"),
       row("Plume", null, ver),

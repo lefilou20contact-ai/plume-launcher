@@ -2,8 +2,11 @@
 
 Launcher Minecraft léger (Tauri + Rust).
 
-- Instances multiples (Vanilla ou Fabric), chacune avec ses mods, mondes et réglages
-- Mods Modrinth : recherche, installation avec dépendances, activation, mises à jour (sommes SHA-512 vérifiées)
+- Instances multiples (Vanilla, Fabric, Quilt, Forge, NeoForge), chacune avec ses mods, mondes et réglages
+- Mods, shaders et packs de ressources Modrinth : recherche, dépendances, activation, mises à jour (SHA-512 vérifiées)
+- Modpacks Modrinth (.mrpack) : installation en un clic ou glisser-déposer
+- Plume Lab : test de lancement automatique pour les créateurs de mods (démarrage, mémoire, CPU, erreurs, compatibilité)
+- Export d'instance en .zip
 - Plusieurs comptes Microsoft, jeu hors ligne possible 30 jours après la dernière vérification
 - Téléchargements vérifiés (SHA-1), relancés en cas d'échec, Java téléchargé automatiquement
 - Logs en direct, temps de jeu, duplication d'instance
@@ -24,8 +27,11 @@ Launcher Minecraft léger (Tauri + Rust).
 Le dossier `docs/` contient le site (français à la racine, anglais dans `en/`), publié avec GitHub Pages.
 
 ## Mettre à jour le projet depuis un zip
-    bash update.sh "message du commit" v0.2.5
+    bash update.sh "message du commit" v0.3.0      # PLUME_SITE=1 pour aussi mettre à jour le site
 Récupère d'abord GitHub (nouvelles langues, liens de don), fusionne les traductions sans les écraser, puis envoie et crée le tag.
 
 ## Publier
-    git tag v0.2.3 && git push origin v0.2.3   # trois nombres obligatoires
+    git tag v0.3.0 && git push origin v0.3.0   # trois nombres obligatoires
+
+## Cosmétiques (prévu)
+Voir `backend/COSMETICS.md` et `backend/supabase/schema.sql`.

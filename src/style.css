@@ -127,3 +127,8 @@ nav .donate:hover{color:#e0557a}
 .lang .pb{height:6px;border-radius:4px;background:var(--line);overflow:hidden;width:130px;flex:none}.lang .pb u{display:block;height:100%;background:var(--ok);border-radius:4px}
 .warn{color:#d6a02b;font-size:13px;margin-top:4px}
 .icard .acts{flex-wrap:wrap}
+
+/* ---- Lab ---- */
+.verdict{padding:14px 18px;border-radius:12px;font-weight:700;margin-bottom:14px}
+.verdict.ok{background:rgba(31,157,99,.13);color:var(--ok)}.verdict.bad{background:rgba(214,69,69,.13);color:var(--bad)}.verdict.warn{background:rgba(214,160,43,.15);color:#c8941f}
+.issues{margin:6px 0 0;padding-left:20px;color:var(--mute);font-size:13.5px;word-break:break-word}.delta{font-size:13px;color:var(--mute)}

@@ -4,17 +4,20 @@ use futures_util::{stream, StreamExt};
 use serde_json::Value;
 use sha1::{Digest, Sha1};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{collections::{BTreeMap, HashSet}, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::{Duration, UNIX_EPOCH}};
+use std::{collections::BTreeMap, path::{Path, PathBuf}, process::Stdio, sync::Mutex, time::{Duration, UNIX_EPOCH}};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 mod auth;
 mod config;
 mod instances;
+mod lab;
+mod loaders;
 mod modrinth;
 
 // Instances en cours de jeu (identifiant -> numéro de processus ; 0 = en préparation).
 static RUNNING: Mutex<BTreeMap<String, u32>> = Mutex::new(BTreeMap::new());
+static LAST_EXIT: Mutex<BTreeMap<String, i32>> = Mutex::new(BTreeMap::new());
 static PART: AtomicU64 = AtomicU64::new(0);
 
 fn prog(app: &AppHandle, t: &str, d: u64, n: u64) {
@@ -189,60 +192,17 @@ async fn list_versions(app: AppHandle, snapshots: bool) -> Result<Vec<String>, S
         .filter_map(|x| x["id"].as_str().map(String::from)).collect())
 }
 
-fn lib_key(name: &str) -> String { name.split(':').take(2).collect::<Vec<_>>().join(":") }
-
-fn maven_path(name: &str) -> Option<String> {
-    let p: Vec<&str> = name.split(':').collect();
-    if p.len() < 3 || p.iter().any(|s| s.is_empty() || s.contains('/') || s.contains("..")) { return None }
-    let cl = p.get(3).map(|c| format!("-{c}")).unwrap_or_default();
-    Some(format!("{}/{}/{}/{}-{}{}.jar", p[0].replace('.', "/"), p[1], p[2], p[1], p[2], cl))
-}
-
-async fn fabric_loader_version(c: &reqwest::Client, mc: &str) -> Result<String, String> {
-    let v = get_json(c, &format!("{}/versions/loader/{}", config::FABRIC_META, mc)).await
-        .map_err(|_| format!("Impossible de préparer Fabric pour Minecraft {mc} (version non supportée ou hors ligne)"))?;
-    let arr = v.as_array().cloned().unwrap_or_default();
-    arr.iter().find(|x| x["loader"]["stable"] == true).or(arr.first())
-        .and_then(|x| x["loader"]["version"].as_str()).map(String::from)
-        .ok_or_else(|| format!("Fabric ne supporte pas Minecraft {mc}"))
-}
-
-async fn loader_profile(c: &reqwest::Client, shared: &Path, mc: &str, lv: &str) -> Result<Value, String> {
-    if !lv.chars().all(|ch| ch.is_ascii_alphanumeric() || ".-_".contains(ch)) { return Err("Version de Fabric invalide".into()) }
-    let p = shared.join("loaders").join(format!("fabric-{mc}-{lv}.json"));
-    if p.exists() { return serde_json::from_str(&tokio::fs::read_to_string(&p).await.map_err(e)?).map_err(e) }
-    let t = c.get(format!("{}/versions/loader/{}/{}/profile/json", config::FABRIC_META, mc, lv)).send().await
-        .map_err(|_| "Connexion requise pour télécharger Fabric".to_string())?
-        .error_for_status().map_err(e)?.text().await.map_err(e)?;
-    tokio::fs::create_dir_all(p.parent().unwrap()).await.map_err(e)?;
-    tokio::fs::write(&p, &t).await.map_err(e)?;
+// Profil JSON d'une version de Minecraft (en cache après le premier téléchargement).
+async fn load_version_json(c: &reqwest::Client, shared: &Path, version: &str) -> Result<Value, String> {
+    let vjson = shared.join("versions").join(version).join(format!("{version}.json"));
+    if vjson.exists() { return serde_json::from_str(&tokio::fs::read_to_string(&vjson).await.map_err(e)?).map_err(e) }
+    let manifest = get_json(c, config::MOJANG_MANIFEST).await.map_err(|_| "Connexion requise pour télécharger cette version".to_string())?;
+    let url = manifest["versions"].as_array().and_then(|v| v.iter().find(|x| x["id"] == version))
+        .and_then(|x| x["url"].as_str()).ok_or(format!("Version {version} introuvable"))?.to_string();
+    let t = c.get(&url).send().await.map_err(e)?.error_for_status().map_err(e)?.text().await.map_err(e)?;
+    tokio::fs::create_dir_all(vjson.parent().unwrap()).await.map_err(e)?;
+    tokio::fs::write(&vjson, &t).await.map_err(e)?;
     serde_json::from_str(&t).map_err(e)
-}
-
-// Ajoute les bibliothèques de Fabric (en premier) et remplace la classe principale.
-fn merge_fabric(v: &mut Value, prof: &Value) {
-    let mut fab: Vec<Value> = vec![];
-    let mut keys: HashSet<String> = HashSet::new();
-    for l in prof["libraries"].as_array().into_iter().flatten() {
-        let (Some(name), Some(base)) = (l["name"].as_str(), l["url"].as_str()) else { continue };
-        if !base.starts_with("https://") { continue }
-        let Some(path) = maven_path(name) else { continue };
-        let base = if base.ends_with('/') { base.to_string() } else { format!("{base}/") };
-        keys.insert(lib_key(name));
-        fab.push(serde_json::json!({"name": name, "downloads": {"artifact": {"path": path, "url": format!("{base}{path}")}}}));
-    }
-    let vanilla: Vec<Value> = v["libraries"].as_array().cloned().unwrap_or_default().into_iter()
-        .filter(|l| !keys.contains(&lib_key(l["name"].as_str().unwrap_or("")))).collect();
-    fab.extend(vanilla);
-    v["libraries"] = serde_json::json!(fab);
-    if let Some(m) = prof["mainClass"].as_str() { v["mainClass"] = serde_json::json!(m); }
-    for k in ["jvm", "game"] {
-        if let Some(extra) = prof["arguments"][k].as_array() {
-            let mut a = v["arguments"][k].as_array().cloned().unwrap_or_default();
-            a.extend(extra.iter().cloned());
-            v["arguments"][k] = serde_json::json!(a);
-        }
-    }
 }
 
 #[tauri::command]
@@ -259,11 +219,13 @@ async fn create_instance(app: AppHandle, name: String, version: String, loader: 
     if version.is_empty() || version.len() > 40 || !version.chars().all(|c| c.is_ascii_alphanumeric() || ".-_".contains(c)) {
         return Err("Version invalide".into());
     }
-    let lv = match loader.as_str() {
-        "vanilla" => None,
-        "fabric" => Some(fabric_loader_version(&client()?, &version).await?),
-        _ => return Err("Type d'instance inconnu".into()),
-    };
+    if !loaders::supported(&loader) { return Err("Type d'instance inconnu".into()) }
+    let c = client()?;
+    let lv = if loader == "vanilla" { None } else { Some(loaders::resolve(&c, &loader, &version).await?) };
+    // Forge et NeoForge : l'installateur officiel est lancé tout de suite (le résultat est réutilisé ensuite).
+    if let Some(l) = &lv {
+        if loader == "forge" || loader == "neoforge" { loaders::install_forge_like(&app, &c, &root(&app).join("shared"), &loader, &version, l).await?; }
+    }
     let inst = instances::create(&app, &name, &version, &loader, lv)?;
     instances::write_defaults(&app, inst["id"].as_str().unwrap_or(""), mc_lang.as_deref(), profile.unwrap_or(1));
     Ok(inst)
@@ -289,13 +251,42 @@ fn open_folder(app: AppHandle, id: Option<String>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn mod_search(app: AppHandle, instance_id: String, query: String, offset: u32) -> Result<Value, String> {
-    modrinth::search(&app, &instance_id, &query, offset).await
+async fn mod_search(app: AppHandle, instance_id: String, query: String, offset: u32, kind: Option<String>) -> Result<Value, String> {
+    modrinth::search(&app, &instance_id, &query, offset, kind.as_deref().unwrap_or("mod")).await
 }
 
 #[tauri::command]
-async fn mod_install(app: AppHandle, instance_id: String, project: String) -> Result<Value, String> {
-    modrinth::install(&app, &instance_id, &project).await
+async fn mod_install(app: AppHandle, instance_id: String, project: String, kind: Option<String>) -> Result<Value, String> {
+    modrinth::install(&app, &instance_id, &project, kind.as_deref().unwrap_or("mod")).await
+}
+
+#[tauri::command]
+async fn mod_search_modpacks(query: String, offset: u32) -> Result<Value, String> { modrinth::search_modpacks(&query, offset).await }
+
+#[tauri::command]
+async fn mod_install_modpack(app: AppHandle, project: String) -> Result<Value, String> { modrinth::install_modpack(&app, &project).await }
+
+#[tauri::command]
+async fn import_mrpack(app: AppHandle, path: String) -> Result<Value, String> { modrinth::import_mrpack(&app, Path::new(&path)).await }
+
+#[tauri::command]
+fn add_files(app: AppHandle, instance_id: String, paths: Vec<String>) -> Result<usize, String> { instances::add_files(&app, &instance_id, &paths) }
+
+#[tauri::command]
+async fn export_instance(app: AppHandle, id: String, worlds: bool) -> Result<String, String> {
+    let a = app.clone();
+    let p = tokio::task::spawn_blocking(move || instances::export(&a, &id, worlds)).await.map_err(e)??;
+    Ok(p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn open_exports(app: AppHandle) -> Result<(), String> {
+    let p = root(&app).join("exports");
+    std::fs::create_dir_all(&p).map_err(e)?;
+    let mut c = if cfg!(target_os = "windows") { std::process::Command::new("explorer") }
+        else if cfg!(target_os = "macos") { std::process::Command::new("open") }
+        else { std::process::Command::new("xdg-open") };
+    c.arg(&p).spawn().map(|_| ()).map_err(e)
 }
 
 #[tauri::command]
@@ -366,11 +357,11 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
         serde_json::from_str(&t).map_err(e)?
     };
 
-    if inst["loader"] == "fabric" {
-        let lv = inst["loader_version"].as_str().ok_or("Version de Fabric manquante")?;
-        prog(&app, "Préparation de Fabric", 0, 0);
-        let prof = loader_profile(&c, &shared, &version, lv).await?;
-        merge_fabric(&mut v, &prof);
+    let loader = inst["loader"].as_str().unwrap_or("vanilla").to_string();
+    if loader != "vanilla" {
+        prog(&app, &format!("Préparation de {}", loaders::label(&loader)), 0, 0);
+        let prof = loaders::profile(&app, &c, &shared, &inst).await?;
+        loaders::merge(&mut v, &prof);
     }
 
     prog(&app, "Préparation de Java", 0, 0);
@@ -382,7 +373,7 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     };
 
     // Une version déjà préparée n'est pas revérifiée : démarrage bien plus rapide.
-    let loader_key = if inst["loader"] == "fabric" { format!("fabric-{}", inst["loader_version"].as_str().unwrap_or("")) } else { "vanilla".to_string() };
+    let loader_key = format!("{}-{}", loader, inst["loader_version"].as_str().unwrap_or(""));
     let ready = shared.join("versions").join(&version).join(format!(".ready-{loader_key}"));
     let fast = ready.exists();
 
@@ -399,10 +390,11 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     for l in v["libraries"].as_array().into_iter().flatten() {
         if !allowed(l.get("rules").unwrap_or(&Value::Null)) { continue }
         let a = &l["downloads"]["artifact"];
-        if let (Some(p), Some(u)) = (a["path"].as_str(), a["url"].as_str()) {
+        if let Some(p) = a["path"].as_str() {
             let dest = shared.join("libraries").join(p);
             classpath.push(dest.to_string_lossy().to_string());
-            libs.push((u.to_string(), dest, a["sha1"].as_str().map(String::from)));
+            // url vide : fichier produit par l'installateur du loader, rien à télécharger.
+            if let Some(u) = a["url"].as_str().filter(|u| !u.is_empty()) { libs.push((u.to_string(), dest, a["sha1"].as_str().map(String::from))); }
         }
         if let Some(k) = l["natives"][os].as_str() {
             let k = k.replace("${arch}", if cfg!(target_pointer_width = "64") { "64" } else { "32" });
@@ -508,6 +500,8 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
         ("${classpath}", classpath.join(sep)),
         ("${library_directory}", shared.join("libraries").to_string_lossy().to_string()),
         ("${classpath_separator}", sep.into()),
+        ("${primary_jar}", jar.to_string_lossy().to_string()),
+        ("${primary_jar_name}", format!("{version}.jar")),
     ];
     let main_class = v["mainClass"].as_str().ok_or("mainClass manquant")?.to_string();
     let ram = ram_gb.clamp(1, 32);
@@ -522,6 +516,10 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     if v["javaVersion"]["majorVersion"].as_u64().unwrap_or(0) >= 21 && !custom_java && java != "java" {
         args.push("-XX:+AutoCreateSharedArchive".into());
         args.push(format!("-XX:SharedArchiveFile={}", game_dir.join("plume.jsa").to_string_lossy()));
+    }
+    // Test du Lab : journal du ramasse-miettes (Java 9 et plus).
+    if opts["lab"] == true && v["javaVersion"]["majorVersion"].as_u64().unwrap_or(8) >= 9 {
+        args.push(format!("-Xlog:gc:file={}:time", game_dir.join("plume-gc.log").to_string_lossy()));
     }
     args.extend(opts["jvmArgs"].as_str().unwrap_or("").split_whitespace().filter(|a| a.starts_with('-')).map(String::from));
     if v["arguments"].is_object() {
@@ -562,6 +560,7 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     let started = std::time::Instant::now();
     tauri::async_runtime::spawn(async move {
         let code = child.wait().await.ok().and_then(|s| s.code()).unwrap_or(-1);
+        if let Ok(mut m) = LAST_EXIT.lock() { m.insert(id2.clone(), code); }
         if let Ok(mut r) = RUNNING.lock() { r.remove(&id2); }
         instances::add_playtime(&app2, &id2, started.elapsed().as_secs());
         if hide { if let Some(w) = app2.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); } }
@@ -866,7 +865,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![i18n_sync, i18n_load, diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![lab::lab_run, mod_search_modpacks, mod_install_modpack, import_mrpack, add_files, export_instance, open_exports, i18n_sync, i18n_load, diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }
