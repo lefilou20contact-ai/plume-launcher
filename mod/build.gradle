@@ -1,0 +1,40 @@
+plugins {
+    id 'fabric-loom' version '1.9-SNAPSHOT'
+}
+
+// Le nom du fichier contient la version de Minecraft : le launcher s'en sert pour choisir le bon fichier.
+version = "${project.mod_version}+mc${project.minecraft_version}"
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    // Adresse du serveur : variable d'environnement PLUME_BACKEND_URL (secret GitHub) ou -PbackendUrl=...
+    def backend = (project.findProperty("backendUrl") ?: System.getenv("PLUME_BACKEND_URL") ?: "").toString()
+    inputs.property "backend", backend
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+    filesMatching("plume_cosmetics_defaults.json") {
+        expand "backendUrl": backend
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}

@@ -1,6 +1,12 @@
-# Cosmétiques Plume : architecture prévue
+# Cosmétiques Plume : architecture
 
-Rien n'est vendu ni activé pour l'instant. Ce document fixe le plan pour que chaque pièce puisse être construite séparément.
+## État
+- **Mod** (`mod/`) : écrit, côté client, capes uniquement (Minecraft 1.21.4, Fabric/Quilt). Jamais compilé encore : le premier tag `mod-v0.1.0` fera la première compilation sur GitHub.
+- **Serveur** (`backend/supabase/`) : schéma SQL et fonction `plume` écrits, pas encore déployés.
+- **Launcher** : page « Cosmétiques » (installation du mod par instance, catalogue, équiper une cape) écrite.
+- Rien n'est vendu : les cosmétiques à 0 centime sont donnés à tous.
+
+## Plan
 
 ## Les 4 pièces
 1. **Le mod (Fabric, puis les autres loaders)** : affiche les capes et accessoires sur les joueurs. Il demande au serveur « quelles tenues portent ces UUID ? » et garde la réponse en cache quelques minutes. Les modèles et textures sont créés par vous (Blockbench) : ne rien copier d'un autre client.

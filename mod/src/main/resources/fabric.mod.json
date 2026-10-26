@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "plume_cosmetics",
+  "version": "${version}",
+  "name": "Plume Cosmetics",
+  "description": "Capes et cosmétiques visibles par les autres joueurs, intégrés au launcher Plume. / Capes and cosmetics visible to other players, integrated with the Plume launcher.",
+  "authors": ["Plume"],
+  "contact": {
+    "homepage": "https://lefilou20contact-ai.github.io/plume-launcher/",
+    "sources": "https://github.com/lefilou20contact-ai/plume-launcher",
+    "issues": "https://github.com/lefilou20contact-ai/plume-launcher/issues"
+  },
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.plume.cosmetics.PlumeCosmetics"]
+  },
+  "mixins": ["plume_cosmetics.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.4",
+    "java": ">=21"
+  }
+}

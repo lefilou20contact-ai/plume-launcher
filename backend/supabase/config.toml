@@ -1,0 +1,4 @@
+# Les routes publiques (catalogue, lecture des capes) n'ont pas besoin de jeton Supabase ;
+# les routes protégées vérifient notre propre jeton signé.
+[functions.plume]
+verify_jwt = false

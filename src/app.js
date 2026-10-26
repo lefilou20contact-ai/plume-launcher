@@ -172,7 +172,7 @@ const launchOpts = i => ({ ramGb: clampRam(i.ram_gb || S.ram), nice: PROFILES[S.
 let insts = [], curId = localStorage.getItem("plume.cur"), acct = null, dev = null, page = "home", modsTab = "inst", instQuery = "", sysRam = null;
 const running = new Set(), stopping = new Set();
 const curInst = () => insts.find(i => i.id === curId);
-const R = { home: renderHome, inst: renderInsts, mods: renderMods, logs: renderLogs, lab: renderLab, set: renderSettings };
+const R = { home: renderHome, inst: renderInsts, mods: renderMods, logs: renderLogs, cos: renderCosmetics, lab: renderLab, set: renderSettings };
 function go(p) {
   page = p;
   $$(".v").forEach(v => v.classList.toggle("on", v.id === "p-" + p));
@@ -577,6 +577,42 @@ async function renderLogs() {
   logTimer = setInterval(() => { if (page === "logs") pull(false); }, 1000);
 }
 
+// ---------- Cosmétiques ----------
+const KIND_KEY = { cape: "cos.kind_cape", hat: "cos.kind_hat", wings: "cos.kind_wings" };
+async function renderCosmetics() {
+  const el = $("#p-cos"), i = curInst();
+  el.replaceChildren(h("h1", {}, t("cos.title")), h("p", { class: "sub" }, t("cos.sub")));
+  if (!i) el.append(empty(t("c.need_instance")));
+  else {
+    let st = null; try { st = await inv("cosmetics_status", { instanceId: i.id }); } catch (_) {}
+    if (st) {
+      const tg = toggle(st.installed, async v => {
+        showPrep(t("cos.installing"));
+        try { await inv("cosmetics_enable", { instanceId: i.id, enable: v }); hidePrep(); toast(t(v ? "cos.enabled" : "cos.disabled")); await loadInsts(); renderCosmetics(); }
+        catch (err) { hidePrep(); toast(errText(err), "bad"); renderCosmetics(); }
+      });
+      if (!st.supported) tg.disabled = true;
+      el.append(card(t("cos.mod"), row(t("cos.enable") + " · " + i.name, st.supported ? t("cos.privacy") : t("cos.unsupported", { v: st.mc.join(", ") }), tg)));
+    }
+  }
+  const box = h("div"); el.append(card(t("cos.catalog"), box)); box.append(skel(2));
+  try {
+    const d = await inv("cosmetics_catalog");
+    if (!d.items.length) { box.replaceChildren(h("p", { class: "mute" }, t("cos.empty"))); return; }
+    const grid = h("div", { class: "grid" });
+    d.items.forEach(it => {
+      const owned = d.owned.includes(it.id), on = !!d.equipped && d.equipped[it.kind] === it.id;
+      const img = typeof it.preview === "string" && it.preview.startsWith("data:image/png;base64,") ? h("img", { class: "cprev", src: it.preview, alt: "" }) : h("div", { class: "cprev" });
+      const act = owned && d.signed_in
+        ? h("button", { class: "btn sm" + (on ? "" : " p"), onclick: async () => { try { await inv("cosmetics_equip", { kind: it.kind, id: on ? null : it.id }); toast(t("cos.done")); renderCosmetics(); } catch (err) { toast(errText(err), "bad"); } } }, on ? t("cos.unequip") : t("cos.equip"))
+        : h("small", {}, owned ? "" : it.price_cents > 0 ? t("cos.price", { p: (it.price_cents / 100).toFixed(2) }) : t("cos.not_owned"));
+      grid.append(h("div", { class: "icard cos" }, img,
+        h("div", { class: "grow" }, h("b", {}, it.name, on && h("span", { class: "chip" }, t("cos.equipped"))), h("small", {}, t(KIND_KEY[it.kind] || "cos.kind_cape")), it.description && h("small", {}, it.description)), act));
+    });
+    box.replaceChildren(d.signed_in ? null : h("p", { class: "mute" }, t("cos.signin")), grid);
+  } catch (err) { box.replaceChildren(h("p", { class: "mute" }, errText(err))); }
+}
+
 // ---------- Plume Lab ----------
 const labHistory = id => { try { return JSON.parse(localStorage.getItem("plume.lab." + id) || "[]"); } catch (_) { return []; } };
 const saveLab = (id, r) => localStorage.setItem("plume.lab." + id, JSON.stringify([...labHistory(id), r].slice(-8)));
@@ -677,7 +713,7 @@ function renderSettings() {
       row(t("set.ram"), t("set.ram_hint"), h("div", {}, h("div", { class: "ctl" }, rng, lab), warn)),
       row(t("set.jvm"), t("set.jvm_hint"), jvm),
       row(t("set.java"), t("set.java_hint"), jp)),
-    card(t("set.cosmetics"), row(t("set.cosmetics"), t("set.cosmetics_hint"), h("span", { class: "chip" }, t("c.soon")))),
+    card(t("set.cosmetics"), row(t("set.cosmetics"), t("set.cosmetics_hint"), h("button", { class: "btn", onclick: () => go("cos") }, t("c.open")))),
     accountCard(),
     card(t("set.about"),
       row("Plume", null, ver),

@@ -33,5 +33,5 @@ Récupère d'abord GitHub (nouvelles langues, liens de don), fusionne les traduc
 ## Publier
     git tag v0.3.0 && git push origin v0.3.0   # trois nombres obligatoires
 
-## Cosmétiques (prévu)
-Voir `backend/COSMETICS.md` et `backend/supabase/schema.sql`.
+## Cosmétiques
+Mod Fabric `mod/` (tag `mod-vX.Y.Z`), serveur `backend/supabase/` et page « Cosmétiques » du launcher. Voir `backend/COSMETICS.md`.

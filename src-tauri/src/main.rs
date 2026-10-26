@@ -10,6 +10,7 @@ use tauri_plugin_updater::UpdaterExt;
 
 mod auth;
 mod config;
+mod cosmetics;
 mod instances;
 mod lab;
 mod loaders;
@@ -865,7 +866,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![lab::lab_run, mod_search_modpacks, mod_install_modpack, import_mrpack, add_files, export_instance, open_exports, i18n_sync, i18n_load, diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![cosmetics::cosmetics_status, cosmetics::cosmetics_enable, cosmetics::cosmetics_catalog, cosmetics::cosmetics_equip, lab::lab_run, mod_search_modpacks, mod_install_modpack, import_mrpack, add_files, export_instance, open_exports, i18n_sync, i18n_load, diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }

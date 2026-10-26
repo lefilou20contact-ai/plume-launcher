@@ -132,3 +132,7 @@ nav .donate:hover{color:#e0557a}
 .verdict{padding:14px 18px;border-radius:12px;font-weight:700;margin-bottom:14px}
 .verdict.ok{background:rgba(31,157,99,.13);color:var(--ok)}.verdict.bad{background:rgba(214,69,69,.13);color:var(--bad)}.verdict.warn{background:rgba(214,160,43,.15);color:#c8941f}
 .issues{margin:6px 0 0;padding-left:20px;color:var(--mute);font-size:13.5px;word-break:break-word}.delta{font-size:13px;color:var(--mute)}
+
+/* ---- Cosmétiques ---- */
+.cprev{width:64px;height:48px;border-radius:8px;background:var(--line);object-fit:contain;image-rendering:pixelated;flex:none}
+.icard.cos{cursor:default;flex-wrap:nowrap}.icard.cos:hover{transform:none}

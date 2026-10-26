@@ -380,3 +380,17 @@ pub async fn install_modpack(app: &AppHandle, project: &str) -> Result<Value, St
     let _ = tokio::fs::remove_file(&p).await;
     r
 }
+
+// ---------- Entrées suivies par Plume sans passer par Modrinth (ex : le mod de cosmétiques) ----------
+pub fn track(app: &AppHandle, id: &str, entry: Value) -> Result<(), String> {
+    let mut l = read(app, id);
+    l.retain(|m| m["project_id"] != entry["project_id"]);
+    l.push(entry);
+    write(app, id, &l)
+}
+
+pub fn untrack(app: &AppHandle, id: &str, project: &str) -> Result<(), String> {
+    let mut l = read(app, id);
+    l.retain(|m| m["project_id"] != project);
+    write(app, id, &l)
+}

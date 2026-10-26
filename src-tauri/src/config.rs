@@ -27,6 +27,7 @@ pub const FORGE_PROMOS: &str = "https://files.minecraftforge.net/net/minecraftfo
 pub const FORGE_MAVEN: &str = "https://maven.minecraftforge.net/net/minecraftforge/forge";
 pub const NEOFORGE_META: &str = "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml";
 pub const NEOFORGE_MAVEN: &str = "https://maven.neoforged.net/releases/net/neoforged/neoforge";
+pub const COSMETICS_REPO: &str = "lefilou20contact-ai/plume-launcher";
 pub const MODRINTH_API: &str = "https://api.modrinth.com/v2";
 pub const FABRIC_META: &str = "https://meta.fabricmc.net/v2";
 pub const USER_AGENT: &str = "Plume/1.0 (github.com/lefilou20contact-ai/plume-launcher)";
