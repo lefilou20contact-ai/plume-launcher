@@ -24,6 +24,7 @@ async function sign(data: string): Promise<string> {
   return b64(new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(data))));
 }
 async function makeToken(p: { uuid: string; name: string }) {
+  if (!SECRET) throw new Error("PLUME_JWT_SECRET non configuré");
   const body = b64(enc.encode(JSON.stringify({ ...p, exp: Math.floor(Date.now() / 1000) + 3600 })));
   return `${body}.${await sign(body)}`;
 }

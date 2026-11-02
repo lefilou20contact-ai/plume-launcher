@@ -5,7 +5,7 @@ Launcher Minecraft léger (Tauri + Rust).
 - Instances multiples (Vanilla, Fabric, Quilt, Forge, NeoForge), chacune avec ses mods, mondes et réglages
 - Mods, shaders et packs de ressources Modrinth : recherche, dépendances, activation, mises à jour (SHA-512 vérifiées)
 - Modpacks Modrinth (.mrpack) : installation en un clic ou glisser-déposer
-- Plume Lab : test de lancement automatique pour les créateurs de mods (démarrage, mémoire, CPU, erreurs, compatibilité)
+- Plume Lab : dépose un .jar, il est analysé puis testé sur un serveur invisible (démarrage, mémoire, CPU, erreurs, compatibilité), sans ouvrir Minecraft
 - Export d'instance en .zip
 - Plusieurs comptes Microsoft, jeu hors ligne possible 30 jours après la dernière vérification
 - Téléchargements vérifiés (SHA-1), relancés en cas d'échec, Java téléchargé automatiquement

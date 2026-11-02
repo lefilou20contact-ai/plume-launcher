@@ -136,3 +136,15 @@ nav .donate:hover{color:#e0557a}
 /* ---- Cosmétiques ---- */
 .cprev{width:64px;height:48px;border-radius:8px;background:var(--line);object-fit:contain;image-rendering:pixelated;flex:none}
 .icard.cos{cursor:default;flex-wrap:nowrap}.icard.cos:hover{transform:none}
+
+/* ---- Lab : zone de dépôt et arcs animés ---- */
+.drop{border:2px dashed var(--line);border-radius:16px;padding:40px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--card);transition:border-color .2s,background .2s}
+.drop:hover,.drop:focus-visible{border-color:var(--acc);background:var(--sel)}.drop.busy{opacity:.5;pointer-events:none}
+.dropico{font-size:30px;color:var(--acc);animation:bob 2.4s ease-in-out infinite}@keyframes bob{50%{transform:translateY(5px)}}
+.stage{display:flex;flex-direction:column;align-items:center;gap:8px;margin:18px 0}
+.arcs{position:relative;width:96px;height:96px}
+.arcs i{position:absolute;border-radius:50%;border:4px solid transparent;animation:spin 1.3s linear infinite}
+.arcs i:nth-child(1){inset:0;border-top-color:var(--acc);border-right-color:var(--acc)}
+.arcs i:nth-child(2){inset:12px;border-bottom-color:var(--ok);border-left-color:var(--ok);animation-duration:1.9s;animation-direction:reverse}
+.arcs i:nth-child(3){inset:24px;border-top-color:#d6a02b;animation-duration:2.6s}
+@keyframes spin{to{transform:rotate(360deg)}}

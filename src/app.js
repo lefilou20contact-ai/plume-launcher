@@ -374,6 +374,7 @@ async function importPack(path) {
 // Fichiers glissés dans la fenêtre : .mrpack = nouvelle instance ; .jar = mods ; .zip = packs de ressources.
 T.event.listen("tauri://drag-drop", async e => {
   const paths = (e.payload && e.payload.paths) || [];
+  if (page === "lab") { const jar = paths.find(p => /\.jar$/i.test(p)); if (jar && labCtl) labCtl.run(jar); else toast(t("lab.need_jar"), "bad"); return; }
   const packs = paths.filter(p => /\.mrpack$/i.test(p));
   if (packs.length) { for (const p of packs) await importPack(p); return; }
   const i = curInst(); if (!i) return;
@@ -613,63 +614,99 @@ async function renderCosmetics() {
   } catch (err) { box.replaceChildren(h("p", { class: "mute" }, errText(err))); }
 }
 
-// ---------- Plume Lab ----------
-const labHistory = id => { try { return JSON.parse(localStorage.getItem("plume.lab." + id) || "[]"); } catch (_) { return []; } };
-const saveLab = (id, r) => localStorage.setItem("plume.lab." + id, JSON.stringify([...labHistory(id), r].slice(-8)));
-let labBusy = false;
+// ---------- Plume Lab : dépose un .jar ----------
+const labKey = id => "plume.lab.mod." + id;
+const labHistory = id => { try { return JSON.parse(localStorage.getItem(labKey(id)) || "[]"); } catch (_) { return []; } };
+const saveLab = r => { const id = r.inspect.id; localStorage.setItem(labKey(id), JSON.stringify([...labHistory(id), r].slice(-6))); };
+let labBusy = false, labCtl = null;
+const arcs = () => h("div", { class: "arcs", "aria-hidden": "true" }, h("i"), h("i"), h("i"));
+const LOADER_LABEL = { fabric: "Fabric", quilt: "Quilt", forge: "Forge", neoforge: "NeoForge" };
+const ENV_KEY = { "*": "lab.env_both", client: "lab.env_client", server: "lab.env_server" };
+const PHASE_KEY = { inspect: "lab.ph_inspect", prepare: "lab.ph_prepare", deps: "lab.ph_deps", boot: "lab.ph_boot", observe: "lab.ph_observe", stop: "lab.ph_stop", report: "lab.ph_report" };
 T.event.listen("lab-progress", e => {
-  const p = e.payload, el = $("#labstatus"); if (!el || !curInst() || p.id !== curInst().id) return;
-  const s = Math.round(p.elapsed);
-  el.textContent = p.ready != null ? t("lab.live_ready", { s, r: Math.round(p.ready), m: p.rss_mb }) : t("lab.live_wait", { s, m: p.rss_mb });
+  const el = $("#labstatus"); if (!el) return;
+  el.textContent = t(PHASE_KEY[e.payload.phase] || "lab.ph_prepare", { s: Math.round(e.payload.elapsed) });
 });
-function labReport(i, r, prev) {
-  const V = { ok: ["lab.verdict_ok", "ok"], crash: ["lab.verdict_crash", "bad"], timeout: ["lab.verdict_timeout", "bad"], unknown: ["lab.verdict_unknown", "warn"] };
-  const [vk, vc] = V[r.verdict] || V.unknown;
+function labReport(r, prev) {
+  const i = r.inspect, d = r.dynamic, pd = prev && prev.dynamic;
+  const V = { ok: ["lab.v_ok", "ok"], warn: ["lab.v_warn", "warn"], crash: ["lab.v_crash", "bad"], timeout: ["lab.v_timeout", "bad"], incompatible: ["lab.v_incompat", "bad"], static: ["lab.v_static", "warn"] };
+  const [vk, vc] = V[r.verdict] || V.static;
+  const SKIP = { mc: "lab.skip_mc", client: "lab.skip_client", quilt: "lab.skip_quilt", eula: "lab.skip_eula" };
   const na = t("lab.na"), sec = n => t("lab.secs", { n: Math.round(n * 10) / 10 }), mb = n => t("lab.mb", { n });
-  const delta = (a, b, f) => (a != null && b != null) ? ((a - b > 0 ? "+" : "") + f(a - b)) : "";
+  const dlt = (a, b, f) => a != null && b != null ? " (" + (a - b > 0 ? "+" : "") + f(a - b) + ")" : "";
   const list = (title, arr) => arr && arr.length ? h("div", {}, h("b", {}, title), h("ul", { class: "issues" }, arr.map(x => h("li", {}, x)))) : null;
-  const clean = !r.crash_report && !(r.mixin || []).length && !(r.deps || []).length && !r.errors;
-  return h("div", {},
+  const missing = (d && d.deps_missing) || [], auto = (d && d.deps_installed) || [];
+  const depRows = (i.deps || []).map(x => row(x.id, x.range && x.range !== "*" ? x.range : null,
+    h("span", {}, h("span", { class: "chip" }, t(x.required ? "lab.dep_required" : "lab.dep_optional")), missing.includes(x.id) ? h("span", { class: "chip" }, t("lab.dep_missing")) : null)));
+  const cards = [
     h("div", { class: "verdict " + vc }, t(vk)),
     card(null,
-      row(t("lab.m_ready"), prev ? t("lab.compare") + " : " + delta(r.ready_secs, prev.ready_secs, n => sec(n)) : null, r.ready_secs != null ? sec(r.ready_secs) : na),
-      row(t("lab.m_ram"), prev ? delta(r.peak_rss_mb, prev.peak_rss_mb, n => mb(n)) : null, r.peak_rss_mb ? mb(r.peak_rss_mb) : na),
-      row(t("lab.m_cpu"), null, r.cpu_cores != null ? t("lab.m_cpu_val", { n: r.cpu_cores }) : na),
-      row(t("lab.m_mods"), null, String(r.mods)),
-      row(t("lab.m_gc"), null, r.gc ? t("lab.m_gc_val", { n: r.gc.count, max: r.gc.max_ms, total: r.gc.total_ms }) : na),
-      row(t("lab.m_errors"), null, r.errors + " / " + r.warns)),
-    card(t("lab.issues"),
+      row(i.name + " " + i.version, i.id, h("span", { class: "chip" }, LOADER_LABEL[i.loader] || i.loader)),
+      row(t("lab.f_env"), null, t(ENV_KEY[i.env] || "lab.env_both")),
+      row(t("lab.f_mc"), i.mc_range || null, i.mc_ok === true ? "✓ " + r.mc : i.mc_ok === false ? "✗ " + r.mc : na),
+      row(t("lab.f_java"), null, i.java ? "Java " + i.java : na),
+      row(t("lab.f_size"), null, fmtBytes(i.size) + " · " + t("lab.classes", { n: i.classes })),
+      row(t("lab.f_mixins"), null, String((i.mixins || []).length))),
+    card(t("lab.deps"), depRows.length ? depRows : h("p", { class: "mute" }, t("lab.no_deps")), auto.length ? h("small", {}, t("lab.dep_auto") + " : " + auto.join(", ")) : null)];
+  if (d) {
+    cards.push(card(t("lab.metrics"),
+      row(t("lab.m_boot"), null, d.done_secs != null ? sec(d.done_secs) + dlt(d.done_secs, pd && pd.done_secs, sec) : na),
+      row(t("lab.m_ram"), null, d.peak_rss_mb ? mb(d.peak_rss_mb) + dlt(d.peak_rss_mb, pd && pd.peak_rss_mb, mb) : na),
+      row(t("lab.m_cpu_boot"), null, d.boot_cpu_secs != null ? t("lab.cpu_secs", { n: d.boot_cpu_secs }) : na),
+      row(t("lab.m_cpu_idle"), null, d.idle_cpu_pct != null ? t("lab.pct", { n: d.idle_cpu_pct }) : na),
+      row(t("lab.m_gc"), null, d.gc ? t("lab.m_gc_val", { n: d.gc.count, max: d.gc.max_ms, total: d.gc.total_ms }) : na),
+      row(t("lab.m_lag"), null, String(d.lag)),
+      row(t("lab.m_errors"), null, d.errors + " / " + d.warns)));
+    const clean = !d.crash_report && !(d.mixin || []).length && !(d.deps || []).length && !d.errors && !missing.length;
+    cards.push(card(t("lab.issues"),
       clean ? h("p", { class: "mute" }, t("lab.no_issue")) : null,
-      r.crash_report ? h("p", { class: "bad" }, t("lab.i_crash", { file: r.crash_report })) : null,
-      list(t("lab.i_mixin"), r.mixin), list(t("lab.i_deps"), r.deps), list(t("lab.i_errors"), r.samples)),
-    h("div", { class: "bar2" }, h("button", { class: "btn", onclick: async () => {
-      const md = ["# Plume Lab · " + i.name + " (" + i.version + ", " + loaderName(i) + ")", "", t(vk), "",
-        "- " + t("lab.m_ready") + " : " + (r.ready_secs != null ? sec(r.ready_secs) : na), "- " + t("lab.m_ram") + " : " + (r.peak_rss_mb ? mb(r.peak_rss_mb) : na),
-        "- " + t("lab.m_mods") + " : " + r.mods, "- " + t("lab.m_errors") + " : " + r.errors + " / " + r.warns,
-        ...(r.mixin || []).map(x => "- Mixin : " + x), ...(r.deps || []).map(x => "- " + x)].join("\n");
-      try { await navigator.clipboard.writeText(md); toast(t("lab.copied")); } catch (_) { toast(t("toast.copy_fail"), "bad"); } } }, t("lab.copy"))));
+      d.crash_report ? h("p", { class: "bad" }, t("lab.i_crash", { file: d.crash_report })) : null,
+      list(t("lab.i_mixin"), d.mixin), list(t("lab.i_deps"), d.deps), list(t("lab.i_errors"), d.samples)));
+  } else if (r.skipped) cards.push(card(null, h("p", { class: "mute" }, t(SKIP[r.skipped] || "lab.v_static"))));
+  cards.push(h("div", { class: "bar2" }, h("button", { class: "btn", onclick: async () => {
+    const md = ["# Plume Lab · " + i.name + " " + i.version + " (" + (LOADER_LABEL[i.loader] || i.loader) + ", Minecraft " + r.mc + ")", "", t(vk), "",
+      "- " + t("lab.f_mc") + " : " + (i.mc_range || na), "- " + t("lab.f_java") + " : " + (i.java ? "Java " + i.java : na),
+      ...(d ? ["- " + t("lab.m_boot") + " : " + (d.done_secs != null ? sec(d.done_secs) : na), "- " + t("lab.m_ram") + " : " + (d.peak_rss_mb ? mb(d.peak_rss_mb) : na),
+        "- " + t("lab.m_errors") + " : " + d.errors + " / " + d.warns, ...(d.mixin || []).map(x => "- Mixin : " + x), ...(d.deps || []).map(x => "- " + x)] : [])].join("\n");
+    try { await navigator.clipboard.writeText(md); toast(t("lab.copied")); } catch (_) { toast(t("toast.copy_fail"), "bad"); } } }, t("lab.copy"))));
+  return h("div", {}, cards);
 }
 async function renderLab() {
-  const el = $("#p-lab"), i = curInst();
+  const el = $("#p-lab");
   el.replaceChildren(h("h1", {}, t("lab.title")), h("p", { class: "sub" }, t("lab.sub")));
-  if (!i) { el.append(empty(t("c.need_instance"))); return; }
-  const secs = h("input", { class: "inp", type: "number", min: "5", max: "300", value: String(S.labSeconds || 20), "aria-label": t("lab.settle") }); secs.style.width = "100px";
-  const status = h("p", { class: "mute", id: "labstatus" }), out = h("div");
-  const run = h("button", { class: "btn p", disabled: labBusy || running.has(i.id) || !(acct || dev) }, t("lab.run"));
-  run.addEventListener("click", async () => {
-    labBusy = true; run.disabled = true; out.replaceChildren(); status.textContent = t("lab.starting");
-    S.labSeconds = Math.max(5, Math.min(300, +secs.value || 20)); saveS();
-    stopping.add(i.id);
+  const ver = h("select", { class: "inp", "aria-label": t("lab.target") }); ver.style.maxWidth = "160px";
+  const secs = h("input", { class: "inp", type: "number", min: "5", max: "120", value: String(S.labSeconds || 15), "aria-label": t("lab.settle") }); secs.style.width = "90px";
+  const eula = h("input", { type: "checkbox" }); eula.checked = !!S.labEula;
+  const clientOnly = h("input", { type: "checkbox" });
+  const pathInp = h("input", { class: "inp", type: "text", placeholder: t("lab.path_ph") });
+  const stage = h("div", { class: "stage" }), out = h("div");
+  const zone = h("div", { class: "drop", tabindex: "0" }, h("div", { class: "dropico" }, "⬇"), h("b", {}, t("lab.drop")), h("small", {}, t("lab.drop_hint")));
+  async function run(path) {
+    if (labBusy) return;
+    if (!/\.jar$/i.test(path)) { toast(t("lab.need_jar"), "bad"); return; }
+    S.labMc = ver.value; S.labSeconds = Math.max(5, Math.min(120, +secs.value || 15)); S.labEula = eula.checked; saveS();
+    labBusy = true; zone.classList.add("busy"); out.replaceChildren();
+    stage.replaceChildren(arcs(), h("p", { id: "labstatus", class: "mute" }, t("lab.ph_inspect")));
     try {
-      const r = await inv("lab_run", { instanceId: i.id, seconds: S.labSeconds });
-      const prev = labHistory(i.id).slice(-1)[0]; saveLab(i.id, r);
-      status.textContent = ""; out.replaceChildren(labReport(i, r, prev));
-    } catch (err) { stopping.delete(i.id); status.textContent = ""; toast(errText(err), "bad"); }
-    labBusy = false; run.disabled = false; await loadInsts();
-  });
-  el.append(card(t("lab.run_title"), row(t("lab.settle"), t("lab.settle_hint"), secs), h("div", { class: "bar2" }, run), status), out);
-  const hist = labHistory(i.id);
-  if (hist.length) out.append(labReport(i, hist[hist.length - 1], hist[hist.length - 2]));
+      const r = await inv("lab_test", { path, mc: ver.value, seconds: S.labSeconds, acceptEula: eula.checked, clientOnly: clientOnly.checked });
+      const hist = labHistory(r.inspect.id), prev = hist[hist.length - 1]; saveLab(r);
+      out.replaceChildren(labReport(r, prev));
+    } catch (err) { toast(errText(err), "bad"); }
+    labBusy = false; zone.classList.remove("busy"); stage.replaceChildren();
+  }
+  labCtl = { run };
+  pathInp.addEventListener("keydown", ev => { if (ev.key === "Enter" && pathInp.value.trim()) run(pathInp.value.trim()); });
+  const eulaLink = h("a", { href: "#" }, "EULA"); eulaLink.addEventListener("click", ev => { ev.preventDefault(); openUrl("https://www.minecraft.net/en-us/eula"); });
+  el.append(zone, stage, card(t("lab.options"),
+    row(t("lab.target"), t("lab.target_hint"), ver), row(t("lab.settle"), t("lab.settle_hint"), secs),
+    row(t("lab.client_only"), t("lab.client_only_hint"), clientOnly),
+    h("label", { class: "chk" }, eula, tn("lab.eula", { link: eulaLink })),
+    row(t("lab.path"), null, pathInp)), out);
+  try {
+    const l = await inv("list_versions", { snapshots: false });
+    ver.replaceChildren(...l.map(v => h("option", { value: v }, v)));
+    const cur = curInst(); ver.value = S.labMc && l.includes(S.labMc) ? S.labMc : (cur && l.includes(cur.version) ? cur.version : l[0]);
+  } catch (_) { ver.replaceChildren(h("option", { value: "1.21.4" }, "1.21.4")); }
 }
 
 // ---------- Paramètres ----------

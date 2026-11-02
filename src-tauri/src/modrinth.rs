@@ -394,3 +394,25 @@ pub fn untrack(app: &AppHandle, id: &str, project: &str) -> Result<(), String> {
     l.retain(|m| m["project_id"] != project);
     write(app, id, &l)
 }
+
+/// Télécharge un mod et ses dépendances obligatoires dans un dossier, sans instance (utilisé par le Lab).
+pub async fn fetch_into(c: &reqwest::Client, project: &str, mc: &str, ls: &[&str], dir: &Path) -> Result<Vec<String>, String> {
+    if !safe(project) { return Err("Projet invalide".into()) }
+    let mut queue = vec![project.to_string()];
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<String> = vec![];
+    while let Some(p) = queue.pop() {
+        if seen.len() >= 12 || !seen.insert(p.clone()) { continue }
+        let ver = match best_version(c, &p, Some(mc), ls).await {
+            Ok(v) => v,
+            Err(m) => { if p == project { return Err(m) } else { continue } }
+        };
+        out.push(download(c, primary(&ver)?, dir, ".jar").await?);
+        for d in ver["dependencies"].as_array().into_iter().flatten() {
+            if d["dependency_type"] == "required" {
+                if let Some(dp) = d["project_id"].as_str() { if safe(dp) { queue.push(dp.to_string()); } }
+            }
+        }
+    }
+    Ok(out)
+}
