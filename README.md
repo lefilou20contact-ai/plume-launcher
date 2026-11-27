@@ -7,6 +7,8 @@ Launcher Minecraft léger (Tauri + Rust).
 - Modpacks Modrinth (.mrpack) : installation en un clic ou glisser-déposer
 - Plume Lab : dépose un .jar, il est analysé puis testé sur un serveur invisible (démarrage, mémoire, CPU, erreurs, compatibilité), sans ouvrir Minecraft
 - Export d'instance en .zip
+- Créateurs de contenu : mode streamer, préréglages d'enregistrement, sauvegarde auto des mondes, lancement direct
+- Moteur externe (ex : Horizon, Minecraft en Rust) : voir `HORIZON.md`
 - Plusieurs comptes Microsoft, jeu hors ligne possible 30 jours après la dernière vérification
 - Téléchargements vérifiés (SHA-1), relancés en cas d'échec, Java téléchargé automatiquement
 - Logs en direct, temps de jeu, duplication d'instance

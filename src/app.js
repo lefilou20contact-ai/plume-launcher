@@ -153,7 +153,7 @@ T.event.listen("progress", e => {
 // ---------- Réglages (personnalisation) ----------
 const PROFILES = [{ k: "prof.eco", ram: 2, nice: 10 }, { k: "prof.balanced", ram: 4, nice: 0 }, { k: "prof.perf", ram: 8, nice: 0 }];
 const COLORS = ["#2f55f0", "#1f9d63", "#d6812b", "#b74bd6", "#d64545", "#2b9fd6"];
-const DEF = { lang: "auto", langSync: true, theme: "system", accent: "#2f55f0", compact: false, hide: true, width: 0, height: 0, fullscreen: false, profile: 1, ram: 4, jvm: "", java: "", snapshots: false, pack: true };
+const DEF = { lang: "auto", langSync: true, streamer: false, maskLogs: false, backupKeep: 0, muteMusic: false, noPause: false, theme: "system", accent: "#2f55f0", compact: false, hide: true, width: 0, height: 0, fullscreen: false, profile: 1, ram: 4, jvm: "", java: "", snapshots: false, pack: true };
 let S = { ...DEF };
 try { S = { ...DEF, ...JSON.parse(localStorage.getItem("plume.s") || "{}") }; } catch (_) {}
 function ink(hex) { const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150 ? "#101820" : "#fff"; }
@@ -166,7 +166,10 @@ function applyS() {
   document.body.classList.toggle("compact", !!S.compact);
 }
 const saveS = () => { localStorage.setItem("plume.s", JSON.stringify(S)); applyS(); };
-const launchOpts = i => ({ ramGb: clampRam(i.ram_gb || S.ram), nice: PROFILES[S.profile].nice, jvmArgs: S.jvm, javaPath: S.java, profile: S.profile, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
+// Mode streamer / créateurs : cache le pseudo, masque chemins personnels, adresses IP et jetons dans les textes partagés.
+const shown = n => S.streamer ? "••••••" : n;
+const maskText = s => (S.streamer || S.maskLogs) ? String(s).replace(/(\/home\/|\/Users\/|[A-Za-z]:\\Users\\)[^\/\\\s]+/g, "$1•••").replace(/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, "•.•.•.•").replace(/(access_?token|--accessToken)[=\s:]+\S+/gi, "$1 ••••") : String(s);
+const launchOpts = i => ({ ramGb: clampRam(i.ram_gb || S.ram), nice: PROFILES[S.profile].nice, jvmArgs: S.jvm, backupKeep: S.backupKeep || 0, javaPath: S.java, profile: S.profile, width: S.width || null, height: S.height || null, fullscreen: S.fullscreen, hide: S.hide });
 
 // ---------- État ----------
 let insts = [], curId = localStorage.getItem("plume.cur"), acct = null, dev = null, page = "home", modsTab = "inst", instQuery = "", sysRam = null;
@@ -219,7 +222,7 @@ const canPlay = () => !!curInst() && !!(acct || dev);
 // Tête du joueur (peau enregistrée) ; une pastille avec l'initiale sinon.
 function head(a, size) {
   if (!a || typeof a.skin !== "string" || !a.skin.startsWith("data:image/png;base64,")) {
-    const d = h("div", { class: "av" }, ((a && a.name && a.name[0]) || "?").toUpperCase());
+    const d = h("div", { class: "av" }, ((!S.streamer && a && a.name && a.name[0]) || "?").toUpperCase());
     d.style.width = d.style.height = size + "px"; d.style.fontSize = Math.round(size * .45) + "px"; d.style.borderRadius = Math.round(size * .25) + "px";
     return d;
   }
@@ -230,7 +233,7 @@ function head(a, size) {
 }
 function renderSide() {
   closePop();
-  const label = acct ? acct.name : dev ? t("acc.test", { name: dev }) : t("side.signin");
+  const label = acct ? shown(acct.name) : dev ? t("acc.test", { name: dev }) : t("side.signin");
   $("#side-acc").replaceChildren(h("button", { class: "accbtn", "aria-haspopup": "menu", onclick: e => { e.stopPropagation(); accts.length ? openPop() : login(); } },
     head(acct, 34), h("span", { class: "grow" }, h("b", {}, label), h("small", {}, acct ? t("side.account") : t("side.noaccount"))), accts.length ? h("span", { class: "chev" }) : null));
 }
@@ -238,7 +241,7 @@ function closePop() { const p = $("#pop"); if (p) p.remove(); }
 function openPop() {
   if ($("#pop")) { closePop(); return; }
   const items = accts.map(a => h("button", { class: "pitem", onclick: async () => { closePop(); if (!a.active) await switchAcct(a.uuid); } },
-    head(a, 28), h("span", { class: "grow" }, a.name), a.active && h("span", { class: "chip" }, t("acc.active"))));
+    head(a, 28), h("span", { class: "grow" }, shown(a.name)), a.active && h("span", { class: "chip" }, t("acc.active"))));
   $("#side-acc").append(h("div", { id: "pop", class: "pop", role: "menu" }, items,
     h("button", { class: "pitem", onclick: () => { closePop(); login(); } }, h("span", { class: "plus" }, "+"), t("acc.add")),
     acct && h("button", { class: "pitem danger", onclick: async () => { closePop(); await removeAcct(acct.uuid); } }, t("acc.logout"))));
@@ -249,7 +252,7 @@ async function removeAcct(uuid) { try { await inv("account_remove", { uuid }); a
 function accountCard() {
   const c = card(t("set.accounts"));
   accts.forEach(a => c.append(h("div", { class: "item" },
-    h("div", { class: "ctl" }, head(a, 36), h("div", {}, h("b", {}, a.name, a.active && h("span", { class: "chip" }, t("acc.active"))), h("small", {}, t("acc.edition")))),
+    h("div", { class: "ctl" }, head(a, 36), h("div", {}, h("b", {}, shown(a.name), a.active && h("span", { class: "chip" }, t("acc.active"))), h("small", {}, t("acc.edition")))),
     h("div", { class: "ctl" }, !a.active && h("button", { class: "btn sm", onclick: () => switchAcct(a.uuid) }, t("c.use")),
       h("button", { class: "btn sm danger", onclick: () => confirmBox(t("acc.remove_title", { name: a.name }), t("acc.remove_text"), t("c.remove"), () => removeAcct(a.uuid)) }, t("c.remove"))))));
   if (!accts.length) c.append(row(dev ? t("acc.test", { name: dev }) : t("acc.none"), t("acc.hint"), null));
@@ -440,11 +443,19 @@ function editInstModal(i) {
   rng.addEventListener("input", () => { ramV = +rng.value; lab.textContent = ramV + " " + t("u.gb"); });
   const use = toggle(custom, v => { custom = v; rng.disabled = !v; });
   const expW = h("input", { type: "checkbox" });
+  const eng = h("select", { class: "inp" }, h("option", { value: "java" }, t("eng.java")), h("option", { value: "custom" }, t("eng.custom"))); eng.value = i.engine === "custom" ? "custom" : "java";
+  const ecmd = h("input", { class: "inp", type: "text", placeholder: t("eng.cmd_ph"), value: i.custom_cmd || "" });
+  const eargs = h("input", { class: "inp", type: "text", value: i.custom_args || "--minecraft-dir {minecraft_dir}" });
+  const ebox = h("div", {}, h("label", {}, t("eng.cmd")), ecmd, h("label", {}, t("eng.args")), eargs, h("small", {}, t("eng.args_hint")), h("small", {}, t("eng.note")));
+  ebox.hidden = eng.value !== "custom"; eng.addEventListener("change", () => { ebox.hidden = eng.value !== "custom"; });
+  const qpk = h("select", { class: "inp" }, h("option", { value: "" }, t("qp.none")), h("option", { value: "world" }, t("qp.world")), h("option", { value: "server" }, t("qp.server"))); qpk.value = (i.quickplay && i.quickplay.kind) || "";
+  const qpv = h("input", { class: "inp", type: "text", placeholder: t("qp.ph"), value: (i.quickplay && i.quickplay.value) || "" });
   const sz = h("small", {}, t("edit.disk_calc"));
   inv("instance_size", { id: i.id }).then(b => { sz.textContent = t("edit.disk", { size: fmtBytes(b) }); }).catch(() => { sz.textContent = ""; });
   const body = h("div", {}, h("label", {}, t("new.name")), name, h("label", {}, t("edit.color")), sw,
     h("label", {}, t("edit.ram")), h("div", { class: "item" }, h("div", {}, t("edit.ram_own"), h("small", {}, t("edit.ram_hint"))), use),
     h("div", { class: "item" }, rng, lab),
+    h("label", {}, t("eng.title")), eng, ebox, h("label", {}, t("qp.title")), qpk, qpv, h("small", {}, t("qp.hint")),
     h("div", { class: "item" }, h("div", {}, t("edit.verify"), h("small", {}, t("edit.verify_hint"))), mbtn(t("c.verify"), async () => { try { await inv("repair_instance", { id: i.id }); toast(t("toast.verify")); } catch (err) { toast(errText(err), "bad"); } })),
     h("div", { class: "item" }, h("div", {}, t("edit.dup"), h("small", {}, t("edit.dup_hint"))), mbtn(t("c.duplicate"), async () => {
       closeModal(); showPrep(t("prep.copy"));
@@ -455,7 +466,7 @@ function editInstModal(i) {
     sz,
     h("small", {}, t("edit.version_info", { v: i.version, loader: i.loader === "vanilla" ? t("d.vanilla") : loaderName(i) + " " + (i.loader_version || "") })));
   modal(t("edit.title"), body, [mbtn(t("c.cancel"), closeModal), mbtn(t("c.save"), async () => {
-    try { await inv("update_instance", { id: i.id, patch: { name: name.value, color, ram_gb: custom ? ramV : null } }); closeModal(); await loadInsts(); R[page](); toast(t("toast.edited")); }
+    try { await inv("update_instance", { id: i.id, patch: { name: name.value, color, ram_gb: custom ? ramV : null, engine: eng.value, custom_cmd: ecmd.value, custom_args: eargs.value, quickplay: { kind: qpk.value, value: qpv.value } } }); closeModal(); await loadInsts(); R[page](); toast(t("toast.edited")); }
     catch (err) { toast(errText(err), "bad"); }
   }, "p")]);
 }
@@ -559,7 +570,7 @@ async function renderLogs() {
   const sel = h("select", { class: "inp" }, files.map(f => h("option", { value: f.rel }, logLabel(f)))); sel.style.maxWidth = "300px";
   const view = h("div", { class: "logview", tabindex: "0", role: "log" });
   let off = 0, carry = "", auto = true, count = 0;
-  const addLine = x => { view.append(h("div", { class: "ln " + lvl(x) }, x || " ")); if (++count > 3000) { view.firstChild.remove(); count--; } };
+  const addLine = x => { view.append(h("div", { class: "ln " + lvl(x) }, maskText(x) || " ")); if (++count > 3000) { view.firstChild.remove(); count--; } };
   async function pull(reset) {
     if (reset) { view.replaceChildren(); off = 0; carry = ""; count = 0; }
     let r; try { r = await inv("log_read", { instanceId: i.id, rel: sel.value, offset: off }); } catch (_) { return; }
@@ -627,6 +638,21 @@ T.event.listen("lab-progress", e => {
   const el = $("#labstatus"); if (!el) return;
   el.textContent = t(PHASE_KEY[e.payload.phase] || "lab.ph_prepare", { s: Math.round(e.payload.elapsed) });
 });
+function horizonCard(r) {
+  const i = r.inspect, pack = i.classes === 0;
+  const body = [h("p", { class: pack ? "mute" : "bad" }, t(pack ? "hz.pack" : "hz.code")), h("small", {}, t("hz.parts", { a: i.assets || 0, d: i.data || 0 }))];
+  if ((i.assets || 0) + (i.data || 0) > 0 && r.path) {
+    const b = h("button", { class: "btn" }, t("hz.extract"));
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try { const x = await inv("lab_pack", { path: r.path, mc: r.mc }); toast(t("hz.extracted", { n: x.files })); inv("open_exports"); if (x.format_guess) toast(t("hz.format_guess")); }
+      catch (err) { toast(errText(err), "bad"); }
+      b.disabled = false;
+    });
+    body.push(h("div", { class: "bar2" }, b), h("small", {}, t("hz.partial")));
+  }
+  return card(t("hz.title"), ...body);
+}
 function labReport(r, prev) {
   const i = r.inspect, d = r.dynamic, pd = prev && prev.dynamic;
   const V = { ok: ["lab.v_ok", "ok"], warn: ["lab.v_warn", "warn"], crash: ["lab.v_crash", "bad"], timeout: ["lab.v_timeout", "bad"], incompatible: ["lab.v_incompat", "bad"], static: ["lab.v_static", "warn"] };
@@ -648,6 +674,7 @@ function labReport(r, prev) {
       row(t("lab.f_size"), null, fmtBytes(i.size) + " · " + t("lab.classes", { n: i.classes })),
       row(t("lab.f_mixins"), null, String((i.mixins || []).length))),
     card(t("lab.deps"), depRows.length ? depRows : h("p", { class: "mute" }, t("lab.no_deps")), auto.length ? h("small", {}, t("lab.dep_auto") + " : " + auto.join(", ")) : null)];
+  cards.push(horizonCard(r));
   if (d) {
     cards.push(card(t("lab.metrics"),
       row(t("lab.m_boot"), null, d.done_secs != null ? sec(d.done_secs) + dlt(d.done_secs, pd && pd.done_secs, sec) : na),
@@ -721,6 +748,32 @@ function langCard() {
   };
   return card(t("set.language"), h("div", { class: "langs" }, opt("auto", t("set.lang_auto"), null), LANGS.map(l => opt(l.code, l.name, l.pct))), row(t("set.lang_sync"), t("set.lang_sync_hint"), h("div", { class: "ctl" }, h("button", { class: "btn sm", onclick: () => syncI18n(true) }, t("set.lang_refresh")), toggle(S.langSync, v => { S.langSync = v; saveS(); }))), h("small", {}, t("set.lang_help")));
 }
+function creatorCard() {
+  const inst = () => curInst();
+  const apply = async patch => {
+    const i = inst(); if (!i) { toast(t("c.need_instance"), "bad"); return; }
+    try { await inv("apply_options", { instanceId: i.id, patch }); toast(t("cr.applied", { name: i.name })); } catch (err) { toast(errText(err), "bad"); }
+  };
+  const openSub = k => { const i = inst(); if (!i) { toast(t("c.need_instance"), "bad"); return; } inv("open_instance_sub", { instanceId: i.id, sub: k }).catch(x => toast(errText(x), "bad")); };
+  const PRESETS = {
+    hd: { maxFps: 60, enableVsync: false, renderDistance: 16, guiScale: 2, pauseOnLostFocus: false },
+    p4k: { maxFps: 60, enableVsync: false, renderDistance: 24, guiScale: 4, pauseOnLostFocus: false },
+    comfort: { bobView: false, screenEffectScale: 0.2, fovEffectScale: 0.2, damageTiltStrength: 0.2, fov: 0.5, showSubtitles: true } };
+  const keep = h("input", { class: "inp", type: "number", min: "0", max: "20", value: String(S.backupKeep || 0), "aria-label": t("cr.backup") }); keep.style.width = "90px";
+  keep.addEventListener("change", () => { S.backupKeep = Math.max(0, Math.min(20, parseInt(keep.value) || 0)); saveS(); });
+  const btn = (label, fn) => h("button", { class: "btn", onclick: fn }, label);
+  return card(t("cr.title"),
+    row(t("cr.streamer"), t("cr.streamer_hint"), toggle(S.streamer, v => { S.streamer = v; saveS(); renderSide(); })),
+    row(t("cr.mask"), t("cr.mask_hint"), toggle(S.maskLogs, v => { S.maskLogs = v; saveS(); })),
+    row(t("cr.backup"), t("cr.backup_hint"), keep),
+    row(t("cr.folders"), null, h("div", { class: "ctl" }, btn(t("cr.open_shots"), () => openSub("screenshots")), btn(t("cr.open_saves"), () => openSub("saves")), btn(t("cr.open_backups"), () => openSub("backups")))),
+    row(t("cr.backup_now"), null, btn(t("cr.backup_now"), async () => {
+      const i = inst(); if (!i) { toast(t("c.need_instance"), "bad"); return; }
+      try { await inv("backup_now", { instanceId: i.id, keep: S.backupKeep || 5 }); toast(t("cr.backup_done")); } catch (err) { toast(errText(err), "bad"); } })),
+    row(t("cr.presets"), t("cr.presets_hint"), h("div", { class: "ctl" }, btn(t("cr.p_hd"), () => apply(PRESETS.hd)), btn(t("cr.p_4k"), () => apply(PRESETS.p4k)), btn(t("cr.p_comfort"), () => apply(PRESETS.comfort)))),
+    row(t("cr.mute"), t("cr.mute_hint"), toggle(S.muteMusic, v => { S.muteMusic = v; saveS(); apply({ soundCategory_music: v ? 0 : 1 }); })),
+    row(t("cr.nopause"), t("cr.nopause_hint"), toggle(S.noPause, v => { S.noPause = v; saveS(); apply({ pauseOnLostFocus: !v }); })));
+}
 function renderSettings() {
   const el = $("#p-set");
   const sw = h("div", { class: "swatches" }, COLORS.map(c => { const b = h("button", { class: "sw" + (c === S.accent ? " on" : ""), type: "button", "aria-label": c }); b.style.background = c; b.addEventListener("click", () => { S.accent = c; saveS(); [...sw.children].forEach(x => x.classList.toggle("on", x === b)); }); return b; }));
@@ -750,13 +803,14 @@ function renderSettings() {
       row(t("set.ram"), t("set.ram_hint"), h("div", {}, h("div", { class: "ctl" }, rng, lab), warn)),
       row(t("set.jvm"), t("set.jvm_hint"), jvm),
       row(t("set.java"), t("set.java_hint"), jp)),
+    creatorCard(),
     card(t("set.cosmetics"), row(t("set.cosmetics"), t("set.cosmetics_hint"), h("button", { class: "btn", onclick: () => go("cos") }, t("c.open")))),
     accountCard(),
     card(t("set.about"),
       row("Plume", null, ver),
       h("div", { class: "item" }, h("div", {}, h("b", {}, t("set.data")), dhint), h("div", { class: "ctl" }, h("button", { class: "btn", onclick: () => inv("open_folder", { id: null }) }, t("c.open")))),
       row(t("set.diag"), t("set.diag_hint"), h("button", { class: "btn", onclick: async () => {
-        try { const d = await inv("diagnostics"); await navigator.clipboard.writeText(d + "\nLangue : " + lang + "\nThème : " + S.theme); toast(t("toast.diag_copied")); } catch (_) { toast(t("toast.copy_fail"), "bad"); } } }, t("c.copy"))),
+        try { const d = await inv("diagnostics"); await navigator.clipboard.writeText(maskText(d) + "\nLangue : " + lang + "\nThème : " + S.theme); toast(t("toast.diag_copied")); } catch (_) { toast(t("toast.copy_fail"), "bad"); } } }, t("c.copy"))),
       row(t("set.report"), null, h("button", { class: "btn", onclick: () => openUrl(REPO + "/issues") }, t("c.open"))),
       row(t("set.source"), null, h("button", { class: "btn", onclick: () => openUrl(REPO) }, t("c.open"))),
       row(t("set.website"), null, h("button", { class: "btn", onclick: () => openUrl(siteUrl()) }, t("c.open"))),

@@ -85,6 +85,21 @@ pub fn update(app: &AppHandle, id: &str, patch: &Value) -> Result<Value, String>
     if let Some(c) = patch["color"].as_str() {
         if c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit()) { inst["color"] = json!(c); }
     }
+    if let Some(en) = patch["engine"].as_str() {
+        if en == "java" || en == "custom" { inst["engine"] = json!(en); } else { return Err("Moteur inconnu".into()) }
+    }
+    for k in ["custom_cmd", "custom_args"] {
+        if let Some(v) = patch[k].as_str() {
+            if v.len() > 300 || v.chars().any(|c| c.is_control()) { return Err("Valeur invalide".into()) }
+            inst[k] = json!(v.trim());
+        }
+    }
+    if patch["quickplay"].is_object() {
+        let kind = patch["quickplay"]["kind"].as_str().unwrap_or("");
+        let val = patch["quickplay"]["value"].as_str().unwrap_or("").trim();
+        if !matches!(kind, "" | "world" | "server") || val.len() > 100 || val.chars().any(|c| c.is_control()) { return Err("Valeur invalide".into()) }
+        inst["quickplay"] = json!({"kind": kind, "value": val});
+    }
     let out = inst.clone();
     save(app, &list)?;
     Ok(out)
@@ -196,5 +211,52 @@ pub fn add_files(app: &AppHandle, id: &str, paths: &[String]) -> Result<usize, S
         std::fs::copy(src, d.join(sub).join(name)).map_err(e)?;
         n += 1;
     }
+    Ok(n)
+}
+
+// ---------- Créateurs de contenu : sauvegarde des mondes et options du jeu ----------
+/// Copie compressée du dossier saves/ dans « backups » ; ne garde que les `keep` plus récentes.
+pub fn backup(app: &AppHandle, id: &str, keep: usize) -> Result<PathBuf, String> {
+    let src = dir(app, id)?;
+    let saves = src.join("saves");
+    if !saves.is_dir() { return Err("Aucun monde à sauvegarder".into()) }
+    let out_dir = root(app).join("backups").join(id);
+    std::fs::create_dir_all(&out_dir).map_err(e)?;
+    let out = out_dir.join(format!("saves-{}.zip", now()));
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&out).map_err(e)?);
+    let opt = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    add_dir(&mut z, &src, &saves, opt, true)?;
+    z.finish().map_err(e)?;
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&out_dir).map_err(e)?.flatten().map(|f| f.path())
+        .filter(|p| p.extension().map_or(false, |x| x == "zip")).collect();
+    files.sort();
+    while files.len() > keep.max(1) { let _ = std::fs::remove_file(files.remove(0)); }
+    Ok(out)
+}
+
+const OPTION_KEYS: &[&str] = &["fov", "guiScale", "maxFps", "renderDistance", "simulationDistance", "soundCategory_music", "soundCategory_master",
+    "soundCategory_ambient", "pauseOnLostFocus", "showSubtitles", "particles", "fullscreen", "overrideWidth", "overrideHeight", "enableVsync",
+    "bobView", "screenEffectScale", "fovEffectScale", "damageTiltStrength", "entityShadows", "graphicsMode", "narrator", "chatOpacity", "autoJump"];
+
+/// Modifie quelques lignes d'options.txt (liste de clés autorisée, valeurs simples).
+pub fn apply_options(app: &AppHandle, id: &str, patch: &Value) -> Result<usize, String> {
+    let p = dir(app, id)?.join("options.txt");
+    let obj = patch.as_object().ok_or("Valeur invalide")?;
+    let mut lines: Vec<String> = std::fs::read_to_string(&p).unwrap_or_default().lines().map(String::from).collect();
+    let mut n = 0;
+    for (k, v) in obj {
+        if !OPTION_KEYS.contains(&k.as_str()) { continue }
+        let val = match v {
+            Value::Bool(b) => b.to_string(),
+            Value::Number(x) => x.to_string(),
+            Value::String(s) if s.len() <= 20 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_') => s.clone(),
+            _ => continue,
+        };
+        let line = format!("{k}:{val}");
+        if let Some(l) = lines.iter_mut().find(|l| l.split(':').next() == Some(k.as_str())) { *l = line; } else { lines.push(line); }
+        n += 1;
+    }
+    if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).map_err(e)?; }
+    std::fs::write(&p, lines.join("\n") + "\n").map_err(e)?;
     Ok(n)
 }

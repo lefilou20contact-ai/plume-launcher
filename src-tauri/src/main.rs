@@ -335,6 +335,12 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
     let shared = root(&app).join("shared");
     let game_dir = instances::dir(&app, &instance_id)?;
     tokio::fs::create_dir_all(game_dir.join("mods")).await.map_err(e)?;
+    // Sauvegarde automatique des mondes avant le lancement (réglage « créateurs de contenu »).
+    if let Some(n) = opts["backupKeep"].as_u64().filter(|n| *n > 0) {
+        prog(app, "Sauvegarde des mondes", 0, 0);
+        let (a, id) = (app.clone(), instance_id.to_string());
+        let _ = tokio::task::spawn_blocking(move || instances::backup(&a, &id, n as usize)).await;
+    }
     let c = client()?;
 
     // Compte Microsoft obligatoire (mode test réservé aux builds de développement).
@@ -534,6 +540,12 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
         args.extend(v["minecraftArguments"].as_str().unwrap_or("").split_whitespace().map(|s| sub(s, &vars)));
     }
 
+    // Lancement direct dans un monde ou un serveur (Minecraft 1.20 et plus).
+    let (qp_kind, qp_val) = (inst["quickplay"]["kind"].as_str().unwrap_or(""), inst["quickplay"]["value"].as_str().unwrap_or(""));
+    if !qp_val.is_empty() && v["arguments"].to_string().contains("has_quick_plays_support") {
+        if qp_kind == "world" { args.push("--quickPlaySingleplayer".into()); args.push(qp_val.into()); }
+        else if qp_kind == "server" { args.push("--quickPlayMultiplayer".into()); args.push(qp_val.into()); }
+    }
     if opts["fullscreen"] == true {
         args.push("--fullscreen".into());
     } else if let (Some(w), Some(h)) = (opts["width"].as_u64(), opts["height"].as_u64()) {
@@ -542,14 +554,28 @@ async fn launch_inner(app: &AppHandle, instance_id: &str, opts: Value) -> Result
 
     let log = std::fs::File::create(game_dir.join("launcher.log")).map_err(e)?;
     let log2 = log.try_clone().map_err(e)?;
-    let mut cmd = if cfg!(unix) && nice != 0 {
+    // Moteur externe (ex : Horizon, Minecraft en Rust) : Plume prépare les fichiers du jeu puis lance ce programme à la place de Java.
+    let ext: Option<(String, Vec<String>)> = if inst["engine"] == "custom" {
+        let exe = inst["custom_cmd"].as_str().unwrap_or("").to_string();
+        if exe.is_empty() || !Path::new(&exe).is_file() { return Err("Moteur externe introuvable : vérifie le chemin dans les réglages de l'instance".into()) }
+        let (w, h) = (opts["width"].as_u64().unwrap_or(1280).to_string(), opts["height"].as_u64().unwrap_or(720).to_string());
+        let rep = |s: &str| s.replace("{minecraft_dir}", &shared.to_string_lossy()).replace("{game_dir}", &game_dir.to_string_lossy())
+            .replace("{version}", &version).replace("{username}", &sess.name).replace("{width}", &w).replace("{height}", &h).replace("{world}", qp_val);
+        Some((exe, inst["custom_args"].as_str().unwrap_or("").split_whitespace().map(rep).collect()))
+    } else { None };
+    let mut cmd = if let Some((exe, cargs)) = &ext {
+        let mut c = tokio::process::Command::new(exe);
+        c.args(cargs);
+        c
+    } else if cfg!(unix) && nice != 0 {
         let mut c = tokio::process::Command::new("nice");
         c.arg("-n").arg(nice.to_string()).arg(&java);
         c
     } else { tokio::process::Command::new(&java) };
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000);
-    let mut child = cmd.args(&args).current_dir(&game_dir)
+    if ext.is_none() { cmd.args(&args); }
+    let mut child = cmd.current_dir(&game_dir)
         .stdout(Stdio::from(log)).stderr(Stdio::from(log2))
         .spawn().map_err(|_| format!("Impossible de lancer Java ({java})."))?;
 
@@ -807,6 +833,39 @@ fn i18n_load(app: AppHandle) -> Value {
     serde_json::json!({"languages": langs, "files": files})
 }
 
+fn open_path(p: &Path) -> Result<(), String> {
+    let mut c = if cfg!(target_os = "windows") { std::process::Command::new("explorer") }
+        else if cfg!(target_os = "macos") { std::process::Command::new("open") }
+        else { std::process::Command::new("xdg-open") };
+    c.arg(p).spawn().map(|_| ()).map_err(e)
+}
+
+#[tauri::command]
+fn apply_options(app: AppHandle, instance_id: String, patch: Value) -> Result<usize, String> {
+    if RUNNING.lock().map(|r| r.contains_key(&instance_id)).unwrap_or(false) { return Err("Ferme le jeu avant de changer ses options.".into()) }
+    instances::apply_options(&app, &instance_id, &patch)
+}
+
+#[tauri::command]
+async fn backup_now(app: AppHandle, instance_id: String, keep: Option<u64>) -> Result<String, String> {
+    let k = keep.unwrap_or(5).clamp(1, 50) as usize;
+    let a = app.clone();
+    let p = tokio::task::spawn_blocking(move || instances::backup(&a, &instance_id, k)).await.map_err(e)??;
+    Ok(p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn open_instance_sub(app: AppHandle, instance_id: String, sub: String) -> Result<(), String> {
+    let base = instances::dir(&app, &instance_id)?;
+    let p = match sub.as_str() {
+        "screenshots" | "saves" | "resourcepacks" | "shaderpacks" | "logs" => base.join(&sub),
+        "backups" => root(&app).join("backups").join(&instance_id),
+        _ => return Err("Dossier invalide".into()),
+    };
+    std::fs::create_dir_all(&p).map_err(e)?;
+    open_path(&p)
+}
+
 #[tauri::command]
 fn logout(app: AppHandle) { auth::logout(&root(&app)) }
 
@@ -866,7 +925,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![cosmetics::cosmetics_status, cosmetics::cosmetics_enable, cosmetics::cosmetics_catalog, cosmetics::cosmetics_equip, lab::lab_test, mod_search_modpacks, mod_install_modpack, import_mrpack, add_files, export_instance, open_exports, i18n_sync, i18n_load, diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
+        .invoke_handler(tauri::generate_handler![apply_options, backup_now, open_instance_sub, lab::lab_pack, cosmetics::cosmetics_status, cosmetics::cosmetics_enable, cosmetics::cosmetics_catalog, cosmetics::cosmetics_equip, lab::lab_test, mod_search_modpacks, mod_install_modpack, import_mrpack, add_files, export_instance, open_exports, i18n_sync, i18n_load, diagnostics, system_ram, data_size, running, stop_game, log_files, log_read, instance_size, duplicate_instance, mod_toggle_file, mod_remove_file, account_list, account_switch, account_remove, repair_instance, launch, read_log, list_instances, create_instance, update_instance, delete_instance, open_folder, mod_search, mod_install, mod_list, mod_toggle, mod_remove, mod_updates, list_versions, check_update, install_update, account_info, dev_offline, login_start, login_finish, logout, open_url])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Plume");
 }

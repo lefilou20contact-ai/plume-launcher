@@ -213,6 +213,8 @@ fn inspect(path: &Path, mc: &str) -> Result<(Meta, Value), String> {
         .ok_or("Aucun descripteur de mod trouvé (fabric.mod.json, quilt.mod.json, mods.toml ou neoforge.mods.toml)")?;
     let major = java_major(&mut z);
     let classes = (0..z.len()).filter(|i| z.name_for_index(*i).map_or(false, |n| n.ends_with(".class"))).count();
+    let assets = (0..z.len()).filter(|i| z.name_for_index(*i).map_or(false, |n| n.starts_with("assets/") && !n.ends_with('/'))).count();
+    let data = (0..z.len()).filter(|i| z.name_for_index(*i).map_or(false, |n| n.starts_with("data/") && !n.ends_with('/'))).count();
     let nested = (0..z.len()).filter(|i| z.name_for_index(*i).map_or(false, |n| n.starts_with("META-INF/jars/") && n.ends_with(".jar"))).count();
     let target = parse_ver(mc);
     let mc_ok = match (&meta.mc_range, &target) {
@@ -224,7 +226,7 @@ fn inspect(path: &Path, mc: &str) -> Result<(Meta, Value), String> {
     let info = json!({
         "id": meta.id, "name": meta.name, "version": meta.version, "loader": meta.loader, "env": meta.env,
         "mc_range": meta.mc_range, "mc_ok": mc_ok, "java": major.map(|m| m.saturating_sub(44)), "size": size,
-        "classes": classes, "nested": nested, "mixins": meta.mixins, "deps": deps
+        "classes": classes, "assets": assets, "data": data, "nested": nested, "mixins": meta.mixins, "deps": deps
     });
     Ok((meta, info))
 }
@@ -430,5 +432,51 @@ async fn lab_inner(app: &AppHandle, path: &str, mc: &str, settle: u64, eula: boo
         else { None };
     let dynamic = if skipped.is_none() { Some(serve_test(app, &meta, p, mc, settle).await?) } else { None };
     let verdict = if info["mc_ok"] == false { "incompatible" } else { dynamic.as_ref().and_then(|d| d["verdict"].as_str()).unwrap_or("static") };
-    Ok(json!({"inspect": info, "dynamic": dynamic, "skipped": skipped, "verdict": verdict, "mc": mc, "when": now}))
+    Ok(json!({"path": path, "inspect": info, "dynamic": dynamic, "skipped": skipped, "verdict": verdict, "mc": mc, "when": now}))
+}
+
+// Version de pack (resource pack) connue pour chaque version de Minecraft ; sinon estimation.
+fn pack_format(mc: &str) -> Option<u32> {
+    match mc { "1.20.1" => Some(15), "1.20.2" => Some(18), "1.20.3" | "1.20.4" => Some(22), "1.20.5" | "1.20.6" => Some(32),
+        "1.21" | "1.21.1" => Some(34), "1.21.2" | "1.21.3" => Some(42), "1.21.4" => Some(46), _ => None }
+}
+
+fn extract_pack(src: &Path, out_dir: &Path, mc: &str) -> Result<Value, String> {
+    use std::io::Write;
+    let mut z = zip::ZipArchive::new(std::fs::File::open(src).map_err(e)?).map_err(|_| "Fichier .jar invalide".to_string())?;
+    let stem: String = src.file_stem().and_then(|s| s.to_str()).unwrap_or("mod").chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).take(60).collect();
+    std::fs::create_dir_all(out_dir).map_err(e)?;
+    let out = out_dir.join(format!("{stem}-pack.zip"));
+    let mut w = zip::ZipWriter::new(std::fs::File::create(&out).map_err(e)?);
+    let opt = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let (mut files, mut total, mut has_meta) = (0usize, 0u64, false);
+    for i in 0..z.len() {
+        let mut f = z.by_index(i).map_err(e)?;
+        if f.is_dir() { continue }
+        let name = f.name().to_string();
+        let keep = name.starts_with("assets/") || name.starts_with("data/") || name == "pack.mcmeta" || name == "pack.png";
+        if !keep || name.contains("..") || name.contains('\\') || name.starts_with('/') { continue }
+        total += f.size();
+        if total > 1_500_000_000 || files > 100_000 { return Err("Fichier trop volumineux".into()) }
+        if name == "pack.mcmeta" { has_meta = true; }
+        w.start_file(name, opt).map_err(e)?;
+        std::io::copy(&mut f, &mut w).map_err(e)?;
+        files += 1;
+    }
+    let fmt = pack_format(mc);
+    if !has_meta {
+        w.start_file("pack.mcmeta", opt).map_err(e)?;
+        w.write_all(format!("{{\"pack\":{{\"description\":\"Extrait par Plume depuis {stem}\",\"pack_format\":{}}}}}", fmt.unwrap_or(46)).as_bytes()).map_err(e)?;
+    }
+    w.finish().map_err(e)?;
+    Ok(json!({"path": out.to_string_lossy(), "files": files, "format_guess": !has_meta && fmt.is_none()}))
+}
+
+/// « Convertisseur » honnête : ne récupère que les ressources et données d'un mod (pas son code Java) sous forme de pack.
+#[tauri::command]
+pub async fn lab_pack(app: AppHandle, path: String, mc: String) -> Result<Value, String> {
+    let p = PathBuf::from(&path);
+    if !p.is_file() || !path.to_lowercase().ends_with(".jar") { return Err("Fichier .jar invalide".into()) }
+    let out = root(&app).join("exports");
+    tokio::task::spawn_blocking(move || extract_pack(&p, &out, &mc)).await.map_err(e)?
 }
